@@ -113,3 +113,9 @@ body{touch-action:none;user-select:none;-webkit-user-select:none;overscroll-beha
 .cgoals li.done{opacity:1}
 .cgoals li.done::before{content:"✓";color:var(--aqua)}
 @media (prefers-reduced-motion:reduce){.stars span.on{animation:none}}
+/* paddle-in meter: tap when the marker is in the sweet spot */
+.paddle{position:absolute;left:50%;top:67%;transform:translateX(-50%);width:min(280px,76vw);display:grid;gap:8px;text-align:center}
+.paddle .meter{position:relative;height:16px;border-radius:8px;background:rgba(40,14,48,.5);box-shadow:inset 0 0 0 1px rgba(255,255,255,.3)}
+.paddle .sweet{position:absolute;top:0;bottom:0;left:55%;width:34%;border-radius:8px;background:rgba(95,240,214,.35)}
+.paddle .sweet::after{content:"";position:absolute;top:0;bottom:0;left:30%;width:41%;border-radius:8px;background:var(--aqua);box-shadow:0 0 10px rgba(95,240,214,.7)}
+.paddle .mark{position:absolute;top:-5px;width:6px;height:26px;margin-left:-3px;border-radius:3px;background:var(--sun);box-shadow:0 0 8px rgba(255,196,107,.9)}
