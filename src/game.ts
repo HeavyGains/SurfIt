@@ -260,6 +260,12 @@ const player=makeSurfer({board:0xfff0dc,stripe:0x18b3b0,skin:0xb5764f,top:0xff6b
 scene.add(player.root);
 const pl:any={tq:[],tDone:[],spinA:0,flipA:0,prone:0,wipe:0,camY:2,landT:0,qAir:new THREE.Quaternion(),f:0.45,vf:0,fT:0.45,xs:10,air:false,airT:0,z0:0,y0:0,lean:0,barrelT:0,lastSign:0,snapCd:0,pos:new THREE.Vector3(),fwd:new THREE.Vector3(1,0,0),side:new THREE.Vector3(0,0,1),up:new THREE.Vector3(0,1,0)};
 const AIR_DUR=1.4;
+/* balance meter: after a landing, and late in a long barrel, the needle drifts off centre and keeps tipping;
+   drag (the same thumb that carves) to push it back. Reach the end of the meter and you wipe out. */
+const BAL:any={on:false,kind:'',t:0,dur:0,b:0,A:0,noise:0,pay:null,shown:0};
+const BAL_K=1.6,BAL_LAND=1.3;
+pl.steerIn=0;
+function stopBalance(){const wasBarrel=BAL.kind==='barrel';BAL.on=false;BAL.pay=null;BAL.kind=wasBarrel?'barrelDone':'';}
 /* air tricks: queued by swipes on the right side, played one after another; land mid-rotation and you wipe out */
 const TRICKS:any={spin:{dur:0.42,pts:400,name:'SPIN'},flip:{dur:0.55,pts:650,name:'FLIP'},grab:{dur:0.38,pts:300,name:'GRAB'}};
 const easeIO=(k:number)=>k<0.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
@@ -395,7 +401,7 @@ const PAD_LEAD=0.7,PAD_SWEEP=2.2,PAD_SWEET=0.72;
 const SHORE_LEN=4.2;   // ride-out: wave settles, surfer celebrates, camera eases back, then the card
 const mult=()=>Math.min(8,1+Math.floor(G.combo/2));
 const floatsEl=document.getElementById('floats'),glowEl=document.getElementById('glow');
-const el={score:$('score'),mult:$('mult'),combo:$('combo'),fill:$('fill'),time:$('time'),pops:$('pops'),hint:$('hint'),demo:$('demoTag'),tuck:$('tuck'),waveName:$('waveName'),card:$('card'),flash:$('flash'),goals:$('goals'),paddle:$('paddle'),padMark:$('padMark')};
+const el={score:$('score'),mult:$('mult'),combo:$('combo'),fill:$('fill'),time:$('time'),pops:$('pops'),hint:$('hint'),demo:$('demoTag'),tuck:$('tuck'),waveName:$('waveName'),card:$('card'),flash:$('flash'),goals:$('goals'),paddle:$('paddle'),padMark:$('padMark'),bal:$('bal'),balMark:$('balMark')};
 function popup(text:string,sub?:string,bad?:boolean){
   if(G.ended)return;
   const d=document.createElement('div');d.className='pop'+(bad?' bad':'');d.textContent=text;
@@ -419,7 +425,7 @@ function floater(txt){
 }
 function award(base){const pts=Math.round(base*mult());G.score+=pts;floater('+'+fmt(pts));return pts;}
 function resetRun(next?:boolean){const sz=SIZES[Math.floor(Math.random()*3)];G.size=sz[0];if(next)G.wave++;el.waveName.textContent='Wave '+G.wave+' · '+sz[1];
-  Object.assign(B,{state:'idle',t:0,amt:0,next:rnd(6,10)});el.tuck.classList.remove('call');pl.wipe=0;
+  Object.assign(B,{state:'idle',t:0,amt:0,next:rnd(6,10)});el.tuck.classList.remove('call');pl.wipe=0;stopBalance();BAL.kind='';
   Object.assign(G,{score:0,combo:0,comboT:0,bestMult:1,airs:0,bestChain:0,barrelTot:0,barrels:0,pearls:0,near:0,hits:0,wipes:0,endPending:false,runT:0,ended:false,phase:G.demo?'ride':'paddle',padT:-PAD_LEAD,shoreT:0,shoreCall:false});trail.length=0;
   G.goals=pickGoals(G.size);renderGoals();}
 
@@ -443,7 +449,7 @@ function countUp(node:HTMLElement,to:number){
 }
 function endRun(wipedOut:boolean){
   document.body.classList.remove('outro');
-  G.ended=true;G.phase='ride';G.demo=true;el.card.hidden=false;
+  G.ended=true;G.phase='ride';G.demo=true;el.card.hidden=false;stopBalance();BAL.kind='';
   const stars=finishGoals(G.goals);
   $('cLabel').textContent=wipedOut?'Three wipeouts':'Wave reached shore';
   countUp($('cScore'),Math.round(G.score));
@@ -468,7 +474,7 @@ canvas.addEventListener('pointerup',endSwipe);canvas.addEventListener('pointerca
 let tuckBtn=false,dragId=null,lastY=0;const keys:any={};
 function takeOver(){if(G.demo){G.demo=false;const keep=B.state;resetRun();if(keep!=='idle')Object.assign(B,{state:'idle',next:4});el.demo.hidden=true;setTimeout(()=>el.hint.style.opacity='0',5000);}}
 canvas.addEventListener('pointerdown',e=>{if(G.ended)return;const wasDemo=G.demo;takeOver();if(!wasDemo)popUp();dragId=e.pointerId;lastY=e.clientY;canvas.setPointerCapture&&canvas.setPointerCapture(e.pointerId);});
-canvas.addEventListener('pointermove',e=>{if(e.pointerId!==dragId||(pl.air&&swipe&&swipe.id===e.pointerId))return;const dy=e.clientY-lastY;lastY=e.clientY;pl.fT=clamp(pl.fT-dy/window.innerHeight*2.4,-0.05,1.2);});
+canvas.addEventListener('pointermove',e=>{if(e.pointerId!==dragId||(pl.air&&swipe&&swipe.id===e.pointerId))return;const dy=e.clientY-lastY;lastY=e.clientY;pl.steerIn-=dy/window.innerHeight*2.4;pl.fT=clamp(pl.fT-dy/window.innerHeight*2.4,-0.05,1.2);});
 const endDrag=e=>{if(e.pointerId===dragId)dragId=null;};
 canvas.addEventListener('pointerup',endDrag);canvas.addEventListener('pointercancel',endDrag);
 el.tuck.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();try{el.tuck.setPointerCapture(e.pointerId);}catch(_){}if(G.ended)return;const wasDemo=G.demo;takeOver();if(!wasDemo&&G.phase==='paddle'){popUp();return;}tuckBtn=true;el.tuck.classList.add('on');});
@@ -528,8 +534,8 @@ function step(dt){
     if(m>7.6&&m<8.4)pl.fT=1.18;
     tuck=(B.state==='forming'&&B.amt>0.3)||B.state==='barrel';
   }
-  if(keys.ArrowUp||keys.KeyW)pl.fT=clamp(pl.fT+dt*1.7,-0.05,1.2);
-  if(keys.ArrowDown||keys.KeyS)pl.fT=clamp(pl.fT-dt*1.7,-0.05,1.2);
+  if(keys.ArrowUp||keys.KeyW){pl.fT=clamp(pl.fT+dt*1.7,-0.05,1.2);pl.steerIn+=dt*1.7;}
+  if(keys.ArrowDown||keys.KeyS){pl.fT=clamp(pl.fT-dt*1.7,-0.05,1.2);pl.steerIn-=dt*1.7;}
   if(G.phase==='paddle'){pl.fT=0.12;tuck=false;}
   if(G.phase==='shore'){pl.fT=lerp(pl.fT,0.32,1-Math.exp(-dt*2));tuck=false;}
 
@@ -554,7 +560,7 @@ function step(dt){
     pl.vf+=((pl.fT-pl.f)*18-pl.vf*7)*dt;
     pl.f+=pl.vf*dt;
     if(pl.f>=0.97){
-      if(pl.vf>0.75&&!tuck&&!inPocket){pl.air=true;pl.airT=0;}
+      if(pl.vf>0.75&&!tuck&&!inPocket&&!BAL.on){pl.air=true;pl.airT=0;}
       pl.f=0.97;if(!pl.air)pl.vf=Math.min(pl.vf,0);
     }
     if(pl.f<0.02){pl.f=0.02;pl.vf=Math.max(pl.vf,0);}
@@ -595,10 +601,12 @@ function step(dt){
       pl.tq.length=0;pl.air=false;pl.landT=0.3;pl.qAir.copy(player.root.quaternion);pl.f=0.78;pl.vf=-0.6;pl.fT=Math.min(pl.fT,0.72);player.spin.rotation.set(0,0,0);player.rider.scale.y=1;
       if(bad){pl.landT=0;wipeout(ck==='grab'?'LATE GRAB':'OVER-ROTATED');}
       else{
+      /* touchdown: the trick only counts once you hold your balance through the meter */
       const n=pl.tDone.length;let pts=250;pl.tDone.forEach((t,i)=>pts+=TRICKS[t].pts*(1+0.5*i));
       const name=n?pl.tDone.map(t=>TRICKS[t].name).join(' + '):'AIR';
-      G.airs++;G.bestChain=Math.max(G.bestChain,n);addCombo(1+Math.min(n,3));award(pts);popup(name,n>1?n+'-trick combo':n?'Clean landing':'Swipe for tricks next time');SFX.land();G.stopT=0.04;G.shake=0.1;
-      if(n>=2)SFX.cheer();
+      const off=Math.min(0.62,0.22+0.1*n+(cur&&tp>=0.88?0.18:0));
+      startBalance('land',off*(Math.random()<0.5?-1:1),{n,pts,name});
+      popup(name,BAL.shown<2?'Drag to keep the needle centred':'Hold your balance');BAL.shown++;SFX.land();G.stopT=0.04;G.shake=0.1;
       for(let q=0;q<30;q++)spray.emit(x+rnd(-1,1),hgt(x,P.w*0.22,P),P.w*0.22+rnd(-0.5,0.5),rnd(-4,0),rnd(1,4),rnd(-1,2),rnd(0.4,0.9));}}
   }else{
     if(pl.wipe>0){pl.wipe-=dt;pl.f=lerp(pl.f,0.1,1-Math.exp(-dt*2));pl.vf=0;
@@ -640,11 +648,35 @@ function step(dt){
     player.head.rotation.y+=(-u.rotation.y*0.7-player.head.rotation.y)*k;
   }
   function wipeout(msg){
-    if(pl.wipe>0)return;pl.wipe=1.6;pl.barrelT=0;pl.air=false;G.combo=0;G.comboT=0;G.shake=0.7;
+    if(pl.wipe>0)return;pl.wipe=1.6;stopBalance();pl.barrelT=0;pl.air=false;G.combo=0;G.comboT=0;G.shake=0.7;
     el.flash.style.opacity='0.5';setTimeout(()=>el.flash.style.opacity='0',120);
     if(!G.demo&&!G.ended){G.wipes++;if(G.wipes>=MAX_WIPES)G.endPending=true;}
     popup(msg,G.demo?'Wiped out':'Wipeout '+G.wipes+' of '+MAX_WIPES,true);SFX.crash();el.tuck.classList.remove('call');
     for(let q=0;q<60;q++)spray.emit(pl.pos.x+rnd(-1,1),pl.pos.y+0.5,pl.pos.z,rnd(-5,3),rnd(2,7),rnd(-2,4),rnd(0.5,1.2));
+  }
+
+  /* balance meter */
+  {const input=pl.steerIn;pl.steerIn=0;
+   if(BAL.on){BAL.t+=dt;
+     if(BAL.kind==='barrel'){if(B.state!=='barrel'||pl.wipe>0)stopBalance();else{BAL.A=lerp(0.5,1.5,sstep(0,3,BAL.t));BAL.noise=lerp(0.25,0.55,sstep(0,3,BAL.t));}}
+     else BAL.A=2.0*sstep(0,0.3,BAL.t);
+   }
+   if(BAL.on){
+     const drift=BAL.A*BAL.b+BAL.noise*(Math.sin(T*6.3+BAL.t*2)+0.6*Math.sin(T*10.7+1.3));
+     const inp=G.demo?-BAL.b*Math.min(1,dt*7)/BAL_K*1.4:input;
+     BAL.b+=drift*dt+BAL_K*inp;
+     if(Math.abs(BAL.b)>=1){BAL.b=Math.sign(BAL.b);const k=BAL.kind;stopBalance();
+       wipeout('LOST BALANCE');if(k==='barrel'&&B.state==='barrel'){B.state='closing';B.t=0;}}
+     else if(BAL.kind==='land'&&BAL.t>=BAL.dur)finishLanding();
+   }else if(B.state==='barrel'&&!(pl.wipe>0)&&pl.barrelT>1.6&&BAL.kind!=='barrelDone')startBalance('barrel',0,null);
+   if(B.state!=='barrel'&&BAL.kind==='barrelDone')BAL.kind='';
+  }
+  function startBalance(kind,b0,pay){Object.assign(BAL,{on:true,kind,t:0,dur:kind==='land'?BAL_LAND:99,b:b0,A:0,noise:kind==='land'?0.15:0.25,pay});}
+  function finishLanding(){
+    const {n,pts,name}=BAL.pay,stomp=Math.abs(BAL.b)<0.3;stopBalance();
+    G.airs++;G.bestChain=Math.max(G.bestChain,n);addCombo(1+Math.min(n,3)+(stomp?1:0));
+    const p=award(pts+(stomp?150:0));
+    popup(stomp?'STOMPED':'LANDED',name+' +'+fmt(p));if(stomp||n>=2)SFX.cheer();else SFX.whoosh();
   }
 
   /* carving tricks */
@@ -771,6 +803,8 @@ function step(dt){
      for(const g of fresh){popup('GOAL!',g.text);SFX.cheer();}}
    const gh=G.demo;if(gh!==hud.gh){hud.gh=gh;el.goals.hidden=gh;}
    const pv=!G.demo&&G.phase==='paddle';if(pv!==hud.pv){hud.pv=pv;el.paddle.hidden=!pv;}
+   const bv=BAL.on&&(BAL.kind==='land'||BAL.t>0.25);if(bv!==hud.bv){hud.bv=bv;el.bal.hidden=!bv;}
+   if(bv){el.balMark.style.top=(50-BAL.b*50).toFixed(1)+'%';const w=Math.abs(BAL.b)>0.6;if(w!==hud.bw){hud.bw=w;el.bal.classList.toggle('warn',w);}}
    if(pv)el.padMark.style.left=(clamp(G.padT/PAD_SWEEP,0,1)*100).toFixed(1)+'%';
    if(m!==hud.m){hud.m=m;el.combo.classList.toggle('heat2',m>=3&&m<5);el.combo.classList.toggle('heat3',m>=5);el.mult.textContent='×'+m;
      const hot=sstep(2,5,m);trMesh.material.uniforms.uCol.value.setRGB(1,0.97-0.2*hot,0.93-0.6*hot);}
