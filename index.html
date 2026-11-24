@@ -29,6 +29,7 @@
   <div class="wave">
     <div class="row label"><span>Sunset Reef · <span id="waveName">Wave 1 · Overhead</span><span class="demo" id="demoTag">DEMO</span></span><span id="time">1:15</span></div>
     <div class="track"><div class="fill" id="fill"></div></div>
+    <ul class="goals" id="goals" aria-label="Goals for this wave" hidden></ul>
   </div>
   <div class="pops" id="pops"></div>
   <div class="bottom">
@@ -38,9 +39,11 @@
 </div>
 <div class="card" id="card" hidden>
   <div class="box">
-    <div class="label">Wave reached shore</div>
+    <div class="label" id="cLabel">Wave reached shore</div>
+    <div class="stars" id="cStars" role="img" aria-label="0 of 3 stars"></div>
     <h2 id="cTitle">Good ride</h2>
     <div class="big" id="cScore">0</div>
+    <ul class="cgoals" id="cGoals"></ul>
     <dl>
       <div><dt>BEST COMBO</dt><dd id="cCombo">×1</dd></div>
       <div><dt>AIRS</dt><dd id="cAirs">0</dd></div>

@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { SFX } from './audio';
 import { clamp, lerp, sstep, rnd, $, fmt } from './util';
+import { pickGoals, checkGoals, finishGoals } from './goals';
 import { mat, makeSurfer, makeSeal, makeTurtle, makeBuoy, makeFin, makeBoat } from './models';
 
 export function startGame(): void {
@@ -363,7 +364,7 @@ function updatePearls(dt){
     q.m.position.set(q.x,hgt(q.x,z,P)+0.75,z);q.m.rotation.y+=dt*3;q.m.rotation.x+=dt*2;
     let gone=q.x<pl.pos.x-0.9||B.state==='idle';
     if(!gone&&B.state==='barrel'&&!(pl.wipe>0)&&Math.abs(q.x-pl.pos.x)<1.2&&Math.abs(z-pl.pos.z)<0.9){
-      gone=true;pearlN++;award(q.gold?300:80);SFX.pick(pearlN);if(pearlN%3===0)addCombo(1);
+      gone=true;pearlN++;if(!G.demo)G.pearls++;award(q.gold?300:80);SFX.pick(pearlN);if(pearlN%3===0)addCombo(1);
       for(let k=0;k<14;k++)spray.emit(q.m.position.x,q.m.position.y,q.m.position.z,rnd(-3,3),rnd(-1,3),rnd(-2,2),rnd(0.3,0.6));}
     if(gone){scene.remove(q.m);pearls.splice(i,1);}
   }
@@ -384,10 +385,11 @@ function updateStreaks(dt,amt,cx,cz){
 }
 
 /* ---------- game state + HUD ---------- */
-const G={stopT:0,slowT:0,size:1,wave:1,score:0,combo:0,comboT:0,bestMult:1,airs:0,barrelTot:0,runT:0,demo:true,ended:false,shake:0,fovKick:0};
+const G={stopT:0,slowT:0,size:1,wave:1,score:0,combo:0,comboT:0,bestMult:1,airs:0,barrelTot:0,barrels:0,pearls:0,near:0,hits:0,wipes:0,endPending:false,goals:[] as any[],runT:0,demo:true,ended:false,shake:0,fovKick:0};
+const MAX_WIPES=3;
 const mult=()=>Math.min(8,1+Math.floor(G.combo/2));
 const floatsEl=document.getElementById('floats'),glowEl=document.getElementById('glow');
-const el={score:$('score'),mult:$('mult'),combo:$('combo'),fill:$('fill'),time:$('time'),pops:$('pops'),hint:$('hint'),demo:$('demoTag'),tuck:$('tuck'),waveName:$('waveName'),card:$('card'),flash:$('flash')};
+const el={score:$('score'),mult:$('mult'),combo:$('combo'),fill:$('fill'),time:$('time'),pops:$('pops'),hint:$('hint'),demo:$('demoTag'),tuck:$('tuck'),waveName:$('waveName'),card:$('card'),flash:$('flash'),goals:$('goals')};
 function popup(text:string,sub?:string,bad?:boolean){
   if(G.ended)return;
   const d=document.createElement('div');d.className='pop'+(bad?' bad':'');d.textContent=text;
@@ -412,7 +414,27 @@ function floater(txt){
 function award(base){const pts=Math.round(base*mult());G.score+=pts;floater('+'+fmt(pts));return pts;}
 function resetRun(next?:boolean){const sz=SIZES[Math.floor(Math.random()*3)];G.size=sz[0];if(next)G.wave++;el.waveName.textContent='Wave '+G.wave+' · '+sz[1];
   Object.assign(B,{state:'idle',t:0,amt:0,next:rnd(6,10)});el.tuck.classList.remove('call');pl.wipe=0;
-  Object.assign(G,{score:0,combo:0,comboT:0,bestMult:1,airs:0,barrelTot:0,runT:0,ended:false});trail.length=0;}
+  Object.assign(G,{score:0,combo:0,comboT:0,bestMult:1,airs:0,barrelTot:0,barrels:0,pearls:0,near:0,hits:0,wipes:0,endPending:false,runT:0,ended:false});trail.length=0;
+  G.goals=pickGoals(G.size);renderGoals();}
+
+/* ---------- goals HUD + end of run ---------- */
+function renderGoals(){
+  el.goals.replaceChildren(...G.goals.map(g=>{const li=document.createElement('li');li.textContent=g.text;
+    li.className=g.done?'done':g.failed?'failed':'';return li;}));
+}
+function endRun(wipedOut:boolean){
+  G.ended=true;G.demo=true;el.card.hidden=false;
+  const stars=finishGoals(G.goals);
+  $('cLabel').textContent=wipedOut?'Three wipeouts':'Wave reached shore';
+  $('cScore').textContent=fmt(Math.round(G.score));
+  $('cTitle').textContent=stars===3?'Epic ride':stars===2?'Great ride':stars===1?'Good ride':wipedOut?'Rough wave':'Keep paddling';
+  $('cStars').replaceChildren(...[0,1,2].map(i=>{const st=document.createElement('span');st.textContent='★';if(i<stars){st.className='on';st.style.animationDelay=(0.35+i*0.22)+'s';}return st;}));
+  $('cStars').setAttribute('aria-label',stars+' of 3 stars');
+  $('cGoals').replaceChildren(...G.goals.map(g=>{const li=document.createElement('li');li.textContent=g.text;li.className=g.done?'done':'';return li;}));
+  $('cCombo').textContent='×'+G.bestMult;$('cAirs').textContent=String(G.airs);$('cBarrel').textContent=G.barrelTot.toFixed(1)+'s';
+  if(stars>0)setTimeout(()=>SFX.cheer(),400);
+  G.runT=0;
+}
 
 /* ---------- input ---------- */
 let tuckBtn=false,dragId=null,lastY=0;const keys:any={};
@@ -447,7 +469,7 @@ const camPos=new THREE.Vector3(24,8,15),camTgt=new THREE.Vector3(4,2,2);
 const nPos=new THREE.Vector3(),nTgt=new THREE.Vector3(),bPos=new THREE.Vector3(),bTgt=new THREE.Vector3();
 let RDT=0.016,barrelBlend=0,last=performance.now(),inBarrelPrev=false;
 const lipV=new THREE.Vector3();
-const hud={m:-1,s:-1,p:-1,f:-1,t:-1};
+const hud:any={m:-1,s:-1,p:-1,f:-1,t:-1,g:'',gh:null};
 
 function step(dt){
   T+=dt;G.runT+=dt;
@@ -455,9 +477,7 @@ function step(dt){
   waveScale=G.size*(1+0.08*Math.sin(T*0.35))*(1-0.22*sstep(0.6,1,prog));
   if(G.runT>=RUN_LEN){
     if(G.demo){const e=G.ended;resetRun();G.ended=e;}
-    else if(!G.ended){G.ended=true;G.demo=true;el.card.hidden=false;
-      $('cScore').textContent=fmt(Math.round(G.score));$('cTitle').textContent=G.score<8000?'Good ride':G.score<25000?'Great ride':'Epic ride';$('cCombo').textContent='×'+G.bestMult;$('cAirs').textContent=String(G.airs);$('cBarrel').textContent=G.barrelTot.toFixed(1)+'s';
-      G.runT=0;}
+    else if(!G.ended)endRun(false);
   }
 
   /* demo pilot */
@@ -522,7 +542,7 @@ function step(dt){
   }else{
     if(pl.wipe>0){pl.wipe-=dt;pl.f=lerp(pl.f,0.1,1-Math.exp(-dt*2));pl.vf=0;
       player.spin.rotation.set(T*7,0,Math.sin(T*5)*1.2);
-      if(pl.wipe<=0){player.spin.rotation.set(0,0,0);pl.f=pl.fT=0.4;}}
+      if(pl.wipe<=0){player.spin.rotation.set(0,0,0);pl.f=pl.fT=0.4;if(G.endPending&&!G.ended)endRun(true);}}
     z=P.w*(1-pl.f);y=hgt(x,z,P);
     surfaceFrame(x,z,P,V,-P.w*pl.vf*0.9,player.root,pl.fwd,pl.up,pl.side);
     pl.lean+=(clamp(-pl.vf*0.45,-0.55,0.55)-pl.lean)*(1-Math.exp(-dt*6));
@@ -550,7 +570,8 @@ function step(dt){
   function wipeout(msg){
     if(pl.wipe>0)return;pl.wipe=1.6;pl.barrelT=0;pl.air=false;G.combo=0;G.comboT=0;G.shake=0.7;
     el.flash.style.opacity='0.5';setTimeout(()=>el.flash.style.opacity='0',120);
-    popup(msg,'Wiped out',true);SFX.crash();el.tuck.classList.remove('call');
+    if(!G.demo&&!G.ended){G.wipes++;if(G.wipes>=MAX_WIPES)G.endPending=true;}
+    popup(msg,G.demo?'Wiped out':'Wipeout '+G.wipes+' of '+MAX_WIPES,true);SFX.crash();el.tuck.classList.remove('call');
     for(let q=0;q<60;q++)spray.emit(pl.pos.x+rnd(-1,1),pl.pos.y+0.5,pl.pos.z,rnd(-5,3),rnd(2,7),rnd(-2,4),rnd(0.5,1.2));
   }
 
@@ -572,7 +593,7 @@ function step(dt){
   const inBarrel=B.state==='barrel'&&!(pl.wipe>0);
   if(inBarrel){pl.barrelT+=dt;G.score+=dt*120*mult();}
   if(!inBarrel&&inBarrelPrev&&pl.barrelT>0.5){
-    G.barrelTot+=pl.barrelT;addCombo(2);const p=award(pl.barrelT*380);popup('BARREL '+pl.barrelT.toFixed(1)+'s',pearlN?pearlN+(pearlN>1?' pearls':' pearl'):'Spat out!');SFX.cheer();G.stopT=0.08;pl.barrelT=0;
+    G.barrelTot+=pl.barrelT;if(!G.demo)G.barrels++;addCombo(2);const p=award(pl.barrelT*380);popup('BARREL '+pl.barrelT.toFixed(1)+'s',pearlN?pearlN+(pearlN>1?' pearls':' pearl'):'Spat out!');SFX.cheer();G.stopT=0.08;pl.barrelT=0;
   }
   if(!inBarrel&&!inBarrelPrev)pl.barrelT=0;
   inBarrelPrev=inBarrel;
@@ -610,13 +631,13 @@ function step(dt){
     // collisions + close calls
     const dx=o.x-pl.pos.x,dz=oz-pl.pos.z;
     if(!G.demo&&B.state!=='barrel'&&!pl.air&&!(pl.wipe>0)&&!o.hit&&Math.abs(dx)<o.r+0.8&&Math.abs(dz)<o.r){
-      o.hit=true;G.combo=0;G.comboT=0;G.shake=0.5;
+      o.hit=true;G.hits++;G.combo=0;G.comboT=0;G.shake=0.5;
       el.flash.style.opacity='0.35';setTimeout(()=>el.flash.style.opacity='0',90);
       popup('BONK!','Combo lost',true);SFX.bonk();
       for(let q=0;q<30;q++)spray.emit(pl.pos.x,pl.pos.y+0.3,pl.pos.z,rnd(-4,3),rnd(2,5),rnd(-3,3),rnd(0.4,0.9));
       pl.vf+=(pl.f>0.5?-1.2:1.2);
     }else if(!G.demo&&B.state!=='barrel'&&!o.hit&&px>pl.pos.x&&o.x<=pl.pos.x&&Math.abs(dz)<3.2&&!pl.air){
-      addCombo(1);award(150);popup('CLOSE CALL');
+      G.near++;addCombo(1);award(150);popup('CLOSE CALL');
     }
     if(o.x<-34||(o.z!==undefined&&o.z<-9)){scene.remove(o.mesh);obstacles.splice(i,1);spawn(0);}
   }
@@ -671,6 +692,11 @@ function step(dt){
 
   /* HUD: frozen once the run is over, while the demo keeps riding behind the end card */
   if(!G.ended){const m=mult();
+   if(!G.demo&&G.goals.length){const fresh=checkGoals(G.goals,G);
+     const key=G.goals.map(g=>g.done?1:g.failed?2:0).join('');
+     if(key!==hud.g){hud.g=key;renderGoals();}
+     for(const g of fresh){popup('GOAL!',g.text);SFX.cheer();}}
+   const gh=G.demo;if(gh!==hud.gh){hud.gh=gh;el.goals.hidden=gh;}
    if(m!==hud.m){hud.m=m;el.combo.classList.toggle('heat2',m>=3&&m<5);el.combo.classList.toggle('heat3',m>=5);el.mult.textContent='×'+m;
      const hot=sstep(2,5,m);trMesh.material.uniforms.uCol.value.setRGB(1,0.97-0.2*hot,0.93-0.6*hot);}
    const sc=Math.round(G.score);if(sc!==hud.s){hud.s=sc;el.score.textContent=fmt(sc);}
