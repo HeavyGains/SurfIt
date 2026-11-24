@@ -265,6 +265,7 @@ const AIR_DUR=1.4;
 const BAL:any={on:false,kind:'',t:0,dur:0,b:0,A:0,noise:0,pay:null,shown:0};
 const BAL_K=1.6,BAL_LAND=1.3;
 pl.steerIn=0;
+const landBal=()=>BAL.on&&BAL.kind==='land';
 function stopBalance(){const wasBarrel=BAL.kind==='barrel';BAL.on=false;BAL.pay=null;BAL.kind=wasBarrel?'barrelDone':'';}
 /* air tricks: queued by swipes on the right side, played one after another; land mid-rotation and you wipe out */
 const TRICKS:any={spin:{dur:0.42,pts:400,name:'SPIN'},flip:{dur:0.55,pts:650,name:'FLIP'},grab:{dur:0.38,pts:300,name:'GRAB'}};
@@ -474,7 +475,7 @@ canvas.addEventListener('pointerup',endSwipe);canvas.addEventListener('pointerca
 let tuckBtn=false,dragId=null,lastY=0;const keys:any={};
 function takeOver(){if(G.demo){G.demo=false;const keep=B.state;resetRun();if(keep!=='idle')Object.assign(B,{state:'idle',next:4});el.demo.hidden=true;setTimeout(()=>el.hint.style.opacity='0',5000);}}
 canvas.addEventListener('pointerdown',e=>{if(G.ended)return;const wasDemo=G.demo;takeOver();if(!wasDemo)popUp();dragId=e.pointerId;lastY=e.clientY;canvas.setPointerCapture&&canvas.setPointerCapture(e.pointerId);});
-canvas.addEventListener('pointermove',e=>{if(e.pointerId!==dragId||(pl.air&&swipe&&swipe.id===e.pointerId))return;const dy=e.clientY-lastY;lastY=e.clientY;pl.steerIn-=dy/window.innerHeight*2.4;pl.fT=clamp(pl.fT-dy/window.innerHeight*2.4,-0.05,1.2);});
+canvas.addEventListener('pointermove',e=>{if(e.pointerId!==dragId||(pl.air&&swipe&&swipe.id===e.pointerId))return;const dy=e.clientY-lastY;lastY=e.clientY;pl.steerIn-=dy/window.innerHeight*2.4;if(!landBal())pl.fT=clamp(pl.fT-dy/window.innerHeight*2.4,-0.05,1.2);});
 const endDrag=e=>{if(e.pointerId===dragId)dragId=null;};
 canvas.addEventListener('pointerup',endDrag);canvas.addEventListener('pointercancel',endDrag);
 el.tuck.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();try{el.tuck.setPointerCapture(e.pointerId);}catch(_){}if(G.ended)return;const wasDemo=G.demo;takeOver();if(!wasDemo&&G.phase==='paddle'){popUp();return;}tuckBtn=true;el.tuck.classList.add('on');});
@@ -534,8 +535,10 @@ function step(dt){
     if(m>7.6&&m<8.4)pl.fT=1.18;
     tuck=(B.state==='forming'&&B.amt>0.3)||B.state==='barrel';
   }
-  if(keys.ArrowUp||keys.KeyW){pl.fT=clamp(pl.fT+dt*1.7,-0.05,1.2);pl.steerIn+=dt*1.7;}
-  if(keys.ArrowDown||keys.KeyS){pl.fT=clamp(pl.fT-dt*1.7,-0.05,1.2);pl.steerIn-=dt*1.7;}
+  if(keys.ArrowUp||keys.KeyW){if(!landBal())pl.fT=clamp(pl.fT+dt*1.7,-0.05,1.2);pl.steerIn+=dt*1.7;}
+  if(keys.ArrowDown||keys.KeyS){if(!landBal())pl.fT=clamp(pl.fT-dt*1.7,-0.05,1.2);pl.steerIn-=dt*1.7;}
+  /* while the landing meter is up your drag only balances; the surfer settles to mid-face on their own */
+  if(landBal()&&!G.demo)pl.fT=lerp(pl.fT,0.58,1-Math.exp(-dt*3));
   if(G.phase==='paddle'){pl.fT=0.12;tuck=false;}
   if(G.phase==='shore'){pl.fT=lerp(pl.fT,0.32,1-Math.exp(-dt*2));tuck=false;}
 
