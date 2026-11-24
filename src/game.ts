@@ -15,7 +15,7 @@ scene.fog=new THREE.Fog(FOG,90,420);
 const camera=new THREE.PerspectiveCamera(60,1,0.1,1500);
 
 const V=11;          // how fast the wave peels (world units / s)
-const RUN_LEN=75;    // seconds per wave
+const RUN_LEN=(window as any).__RUN_LEN||75;    // seconds per wave
 let T=0, waveScale=1;
 const B={state:'idle',t:0,amt:0,cx:10,next:9};
 const SIZES:[number,string][]=[[0.8,'Head high'],[1,'Overhead'],[1.25,'Double overhead']];
@@ -669,8 +669,8 @@ function step(dt){
   SFX.update(pl.air?0.7:pl.f,barrelBlend>0.5,G.size);
   sky.position.copy(camera.position);
 
-  /* HUD */
-  {const m=mult();
+  /* HUD: frozen once the run is over, while the demo keeps riding behind the end card */
+  if(!G.ended){const m=mult();
    if(m!==hud.m){hud.m=m;el.combo.classList.toggle('heat2',m>=3&&m<5);el.combo.classList.toggle('heat3',m>=5);el.mult.textContent='×'+m;
      const hot=sstep(2,5,m);trMesh.material.uniforms.uCol.value.setRGB(1,0.97-0.2*hot,0.93-0.6*hot);}
    const sc=Math.round(G.score);if(sc!==hud.s){hud.s=sc;el.score.textContent=fmt(sc);}
