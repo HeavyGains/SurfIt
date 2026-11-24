@@ -119,3 +119,8 @@ body{touch-action:none;user-select:none;-webkit-user-select:none;overscroll-beha
 .paddle .sweet{position:absolute;top:0;bottom:0;left:55%;width:34%;border-radius:8px;background:rgba(95,240,214,.35)}
 .paddle .sweet::after{content:"";position:absolute;top:0;bottom:0;left:30%;width:41%;border-radius:8px;background:var(--aqua);box-shadow:0 0 10px rgba(95,240,214,.7)}
 .paddle .mark{position:absolute;top:-5px;width:6px;height:26px;margin-left:-3px;border-radius:3px;background:var(--sun);box-shadow:0 0 8px rgba(255,196,107,.9)}
+/* ride-out: everything but the score fades while the wave settles */
+.hud .wave,.hud .bottom,.hud .right{transition:opacity .8s}
+body.outro .hud .wave,body.outro .hud .bottom,body.outro .hud .right{opacity:0}
+.card{animation-duration:.7s}
+.card .box{animation-duration:.6s;animation-delay:.1s;animation-fill-mode:both}

@@ -385,11 +385,11 @@ function updateStreaks(dt,amt,cx,cz){
 }
 
 /* ---------- game state + HUD ---------- */
-const G={stopT:0,slowT:0,size:1,wave:1,score:0,combo:0,comboT:0,bestMult:1,airs:0,barrelTot:0,barrels:0,pearls:0,near:0,hits:0,wipes:0,endPending:false,goals:[] as any[],phase:'ride',padT:0,shoreT:0,shoreCall:false,runT:0,demo:true,ended:false,shake:0,fovKick:0};
+const G={stopT:0,slowT:0,size:1,wave:1,score:0,combo:0,comboT:0,bestMult:1,airs:0,barrelTot:0,barrels:0,pearls:0,near:0,hits:0,wipes:0,endPending:false,goals:[] as any[],phase:'ride',padT:0,shoreT:0,shoreCall:false,shoreAmt:0,runT:0,demo:true,ended:false,shake:0,fovKick:0};
 const MAX_WIPES=3;
 /* paddle-in: the marker sweeps across the meter as the wave lifts you; tap in the sweet spot to pop up */
 const PAD_LEAD=0.7,PAD_SWEEP=2.2,PAD_SWEET=0.72;
-const SHORE_LEN=1.8;
+const SHORE_LEN=4.2;   // ride-out: wave settles, surfer celebrates, camera eases back, then the card
 const mult=()=>Math.min(8,1+Math.floor(G.combo/2));
 const floatsEl=document.getElementById('floats'),glowEl=document.getElementById('glow');
 const el={score:$('score'),mult:$('mult'),combo:$('combo'),fill:$('fill'),time:$('time'),pops:$('pops'),hint:$('hint'),demo:$('demoTag'),tuck:$('tuck'),waveName:$('waveName'),card:$('card'),flash:$('flash'),goals:$('goals'),paddle:$('paddle'),padMark:$('padMark')};
@@ -433,17 +433,23 @@ function popUp(){
   else if(off<0.17){addCombo(1);const p=award(200);popup('NICE TAKEOFF','+'+fmt(p));SFX.whoosh();}
   else{popup(m<PAD_SWEET?'EARLY TAKEOFF':'LATE TAKEOFF','No bonus');SFX.whoosh();}
 }
+function countUp(node:HTMLElement,to:number){
+  const t0=performance.now(),dur=900;node.textContent='0';
+  const tick=(now:number)=>{const k=Math.min(1,(now-t0)/dur),e=1-Math.pow(1-k,3);node.textContent=fmt(Math.round(to*e));if(k<1)requestAnimationFrame(tick);};
+  requestAnimationFrame(tick);
+}
 function endRun(wipedOut:boolean){
+  document.body.classList.remove('outro');
   G.ended=true;G.phase='ride';G.demo=true;el.card.hidden=false;
   const stars=finishGoals(G.goals);
   $('cLabel').textContent=wipedOut?'Three wipeouts':'Wave reached shore';
-  $('cScore').textContent=fmt(Math.round(G.score));
+  countUp($('cScore'),Math.round(G.score));
   $('cTitle').textContent=stars===3?'Epic ride':stars===2?'Great ride':stars===1?'Good ride':wipedOut?'Rough wave':'Keep paddling';
-  $('cStars').replaceChildren(...[0,1,2].map(i=>{const st=document.createElement('span');st.textContent='★';if(i<stars){st.className='on';st.style.animationDelay=(0.35+i*0.22)+'s';}return st;}));
+  $('cStars').replaceChildren(...[0,1,2].map(i=>{const st=document.createElement('span');st.textContent='★';if(i<stars){st.className='on';st.style.animationDelay=(1.1+i*0.25)+'s';}return st;}));
   $('cStars').setAttribute('aria-label',stars+' of 3 stars');
   $('cGoals').replaceChildren(...G.goals.map(g=>{const li=document.createElement('li');li.textContent=g.text;li.className=g.done?'done':'';return li;}));
   $('cCombo').textContent='×'+G.bestMult;$('cAirs').textContent=String(G.airs);$('cBarrel').textContent=G.barrelTot.toFixed(1)+'s';
-  if(stars>0)setTimeout(()=>SFX.cheer(),400);
+  if(stars>0)setTimeout(()=>SFX.cheer(),1100+stars*250);
   G.runT=0;
 }
 
@@ -485,8 +491,10 @@ const hud:any={m:-1,s:-1,p:-1,f:-1,t:-1,g:'',gh:null};
 function step(dt){
   T+=dt;if(G.phase==='ride')G.runT+=dt;
   const prog=clamp(G.runT/RUN_LEN,0,1);
-  const shoreK=G.phase==='shore'?sstep(0,SHORE_LEN,G.shoreT):0;
-  waveScale=G.size*(1+0.08*Math.sin(T*0.35))*(1-0.22*sstep(0.6,1,prog))*(1-0.4*shoreK);
+  /* shoreAmt eases in during the ride-out and back out slowly afterwards, so nothing pops */
+  const shoreK=G.phase==='shore'?sstep(0,3,G.shoreT):0;
+  G.shoreAmt+=(shoreK-G.shoreAmt)*(1-Math.exp(-dt*(shoreK>G.shoreAmt?6:0.8)));
+  waveScale=G.size*(1+0.08*Math.sin(T*0.35))*(1-0.22*sstep(0.6,1,prog*(1-G.shoreAmt)))*(1-0.5*G.shoreAmt);
   if(G.demo){if(G.runT>=RUN_LEN){const e=G.ended;resetRun();G.ended=e;}}
   else if(!G.ended){
     if(G.phase==='paddle'){G.padT+=dt;if(G.padT>=PAD_SWEEP)popUp();}
@@ -494,6 +502,7 @@ function step(dt){
       if(!G.shoreCall&&G.runT>=RUN_LEN-4){G.shoreCall=true;popup('RIDE IT IN','Finish clean for a bonus');}
       if(G.runT>=RUN_LEN){G.runT=RUN_LEN;G.phase='shore';G.shoreT=0;
         if(B.state==='forming'){B.state='idle';B.amt=0;el.tuck.classList.remove('call');}
+        document.body.classList.add('outro');
         if(!(pl.wipe>0)&&!pl.air){const p=award(400);popup('SHORE BREAK','Finish bonus +'+fmt(p));SFX.cheer();G.slowT=0.9;}}
     }else if(G.phase==='shore'){G.shoreT+=dt;if(G.shoreT>=SHORE_LEN&&!(pl.wipe>0))endRun(false);}
   }
@@ -510,6 +519,7 @@ function step(dt){
   if(keys.ArrowUp||keys.KeyW)pl.fT=clamp(pl.fT+dt*1.7,-0.05,1.2);
   if(keys.ArrowDown||keys.KeyS)pl.fT=clamp(pl.fT-dt*1.7,-0.05,1.2);
   if(G.phase==='paddle'){pl.fT=0.12;tuck=false;}
+  if(G.phase==='shore'){pl.fT=lerp(pl.fT,0.32,1-Math.exp(-dt*2));tuck=false;}
 
   const inPocket=false;
   if(G.phase==='ride')B.next-=dt;
@@ -575,6 +585,12 @@ function step(dt){
   {const pr=pl.prone;player.rider.rotation.z=-1.42*pr;player.rider.position.set(-0.62*pr,0.02*pr,0);
    if(pr>0.05){const sw=T*5.5;player.armF.rotation.z=lerp(player.armF.rotation.z,Math.sin(sw)*1.3-0.4,pr);player.armB.rotation.z=lerp(player.armB.rotation.z,Math.sin(sw+Math.PI)*1.3+0.4,pr);
      player.upper.rotation.z=lerp(player.upper.rotation.z,0.25,pr);player.head.rotation.z=0.9*pr;}else player.head.rotation.z=0;}
+  /* ride-out celebration: stand tall, arms up */
+  if(G.phase==='shore'&&!(pl.wipe>0)&&!pl.air){const c=sstep(0.3,1.2,G.shoreT),k=1-Math.exp(-dt*5);
+    player.armF.rotation.z+=(lerp(player.armF.rotation.z,2.3+Math.sin(T*4)*0.15,c)-player.armF.rotation.z)*k;
+    player.armB.rotation.z+=(lerp(player.armB.rotation.z,-2.3-Math.sin(T*4+1)*0.15,c)-player.armB.rotation.z)*k;
+    player.upper.rotation.z+=(lerp(player.upper.rotation.z,0.05,c)-player.upper.rotation.z)*k;
+    player.rider.scale.y=lerp(player.rider.scale.y,1.04,c);}
   pl.pos.set(x,y,z);
   player.root.position.copy(pl.pos);
 
@@ -651,7 +667,7 @@ function step(dt){
       if(o.kind==='turtle')o.mesh.userData.flip.forEach((f,k)=>f.rotation.x=Math.sin(T*4+k)*0.5);
       if(o.kind==='buoy')o.mesh.userData.light.visible=Math.sin(T*5+o.phase)>0;
     }
-    o.mesh.visible=!(B.state!=='idle'&&barrelBlend>0.2&&Math.abs(o.x-pl.pos.x)<22);
+    o.mesh.visible=!(B.state!=='idle'&&barrelBlend>0.2&&Math.abs(o.x-pl.pos.x)<22)&&!(G.phase==='shore'&&Math.abs(o.x-pl.pos.x)<9);
     // collisions + close calls
     const dx=o.x-pl.pos.x,dz=oz-pl.pos.z;
     if(!G.demo&&G.phase==='ride'&&B.state!=='barrel'&&!pl.air&&!(pl.wipe>0)&&!o.hit&&Math.abs(dx)<o.r+0.8&&Math.abs(dz)<o.r){
@@ -702,6 +718,7 @@ function step(dt){
   bPos.set(pl.pos.x-7.5,pl.pos.y+1.0,pl.pos.z+1.1);
   bTgt.set(pl.pos.x+12,pl.pos.y+1.2,pl.pos.z+0.4);
   nPos.lerp(bPos,barrelBlend);nTgt.lerp(bTgt,barrelBlend);
+  if(G.shoreAmt>0.001){const a=G.shoreAmt;nPos.x+=1.5*a;nPos.y+=4.5*a;nPos.z+=6*a;nTgt.x-=2.6*a;nTgt.y+=0.4*a;nTgt.z-=3*a;}
   const kk=1-Math.exp(-RDT*(barrelBlend>0.05&&barrelBlend<0.95?7:4));camPos.lerp(nPos,kk);camTgt.lerp(nTgt,kk);
   camera.position.copy(camPos);
   if(G.shake>0){G.shake-=dt;const s=G.shake*0.6;camera.position.x+=rnd(-s,s);camera.position.y+=rnd(-s,s);}
