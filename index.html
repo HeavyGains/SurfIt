@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#2a1630">
+<title>SurfIt</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800&display=swap">
+</head>
+<body>
+<canvas id="c" aria-label="Surfing gameplay view"></canvas>
+<div class="vignette"></div>
+<div class="flash" id="flash"></div>
+<div class="glow" id="glow"></div>
+<div class="floats" id="floats"></div>
+<div class="hud">
+  <div class="top">
+    <div>
+      <div class="label">Score</div>
+      <div class="score" id="score">0</div>
+    </div>
+    <div class="right">
+      <button class="snd" id="snd" aria-label="Mute sound"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path id="sndWaves" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/><path id="sndX" d="M16 9l6 6M22 9l-6 6" style="display:none"/></svg></button>
+      <div class="combo" id="combo"><div class="in"><b id="mult">×1</b><small>COMBO</small></div></div>
+    </div>
+  </div>
+  <div class="wave">
+    <div class="row label"><span>Sunset Reef · <span id="waveName">Wave 1 · Overhead</span><span class="demo" id="demoTag">DEMO</span></span><span id="time">1:15</span></div>
+    <div class="track"><div class="fill" id="fill"></div></div>
+  </div>
+  <div class="pops" id="pops"></div>
+  <div class="bottom">
+    <div class="hint" id="hint"><span class="drag"></span>Drag up or down to carve.<br>When the barrel forms, hold TUCK.</div>
+    <button class="tuck" id="tuck" aria-label="Hold to tuck into the barrel">TUCK<small>HOLD</small></button>
+  </div>
+</div>
+<div class="card" id="card" hidden>
+  <div class="box">
+    <div class="label">Wave reached shore</div>
+    <h2 id="cTitle">Good ride</h2>
+    <div class="big" id="cScore">0</div>
+    <dl>
+      <div><dt>BEST COMBO</dt><dd id="cCombo">×1</dd></div>
+      <div><dt>AIRS</dt><dd id="cAirs">0</dd></div>
+      <div><dt>BARREL</dt><dd id="cBarrel">0.0s</dd></div>
+    </dl>
+    <button id="again">Ride another wave</button>
+  </div>
+</div>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
