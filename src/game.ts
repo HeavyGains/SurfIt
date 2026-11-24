@@ -258,8 +258,11 @@ function updateWave(){
 /* ---------- player ---------- */
 const player=makeSurfer({board:0xfff0dc,stripe:0x18b3b0,skin:0xb5764f,top:0xff6b4a,bottom:0x24335a,hair:0x2b1a14});
 scene.add(player.root);
-const pl:any={prone:0,wipe:0,camY:2,landT:0,qAir:new THREE.Quaternion(),f:0.45,vf:0,fT:0.45,xs:10,air:false,airT:0,z0:0,y0:0,lean:0,barrelT:0,lastSign:0,snapCd:0,pos:new THREE.Vector3(),fwd:new THREE.Vector3(1,0,0),side:new THREE.Vector3(0,0,1),up:new THREE.Vector3(0,1,0)};
-const AIR_DUR=1.15;
+const pl:any={tq:[],tDone:[],spinA:0,flipA:0,prone:0,wipe:0,camY:2,landT:0,qAir:new THREE.Quaternion(),f:0.45,vf:0,fT:0.45,xs:10,air:false,airT:0,z0:0,y0:0,lean:0,barrelT:0,lastSign:0,snapCd:0,pos:new THREE.Vector3(),fwd:new THREE.Vector3(1,0,0),side:new THREE.Vector3(0,0,1),up:new THREE.Vector3(0,1,0)};
+const AIR_DUR=1.4;
+/* air tricks: queued by swipes on the right side, played one after another; land mid-rotation and you wipe out */
+const TRICKS:any={spin:{dur:0.42,pts:400,name:'SPIN'},flip:{dur:0.55,pts:650,name:'FLIP'},grab:{dur:0.38,pts:300,name:'GRAB'}};
+const easeIO=(k:number)=>k<0.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
 
 const _a=new THREE.Vector3(),_b=new THREE.Vector3(),_c=new THREE.Vector3(),_u=new THREE.Vector3(),_m=new THREE.Matrix4(),_q=new THREE.Quaternion(),_q2=new THREE.Quaternion();
 function surfaceFrame(x,z,P,vx,vz,obj,outF?,outU?,outS?){
@@ -385,7 +388,7 @@ function updateStreaks(dt,amt,cx,cz){
 }
 
 /* ---------- game state + HUD ---------- */
-const G={stopT:0,slowT:0,size:1,wave:1,score:0,combo:0,comboT:0,bestMult:1,airs:0,barrelTot:0,barrels:0,pearls:0,near:0,hits:0,wipes:0,endPending:false,goals:[] as any[],phase:'ride',padT:0,shoreT:0,shoreCall:false,shoreAmt:0,runT:0,demo:true,ended:false,shake:0,fovKick:0};
+const G={stopT:0,slowT:0,size:1,wave:1,score:0,combo:0,comboT:0,bestMult:1,airs:0,bestChain:0,barrelTot:0,barrels:0,pearls:0,near:0,hits:0,wipes:0,endPending:false,goals:[] as any[],phase:'ride',padT:0,shoreT:0,shoreCall:false,shoreAmt:0,runT:0,demo:true,ended:false,shake:0,fovKick:0};
 const MAX_WIPES=3;
 /* paddle-in: the marker sweeps across the meter as the wave lifts you; tap in the sweet spot to pop up */
 const PAD_LEAD=0.7,PAD_SWEEP=2.2,PAD_SWEET=0.72;
@@ -417,7 +420,7 @@ function floater(txt){
 function award(base){const pts=Math.round(base*mult());G.score+=pts;floater('+'+fmt(pts));return pts;}
 function resetRun(next?:boolean){const sz=SIZES[Math.floor(Math.random()*3)];G.size=sz[0];if(next)G.wave++;el.waveName.textContent='Wave '+G.wave+' · '+sz[1];
   Object.assign(B,{state:'idle',t:0,amt:0,next:rnd(6,10)});el.tuck.classList.remove('call');pl.wipe=0;
-  Object.assign(G,{score:0,combo:0,comboT:0,bestMult:1,airs:0,barrelTot:0,barrels:0,pearls:0,near:0,hits:0,wipes:0,endPending:false,runT:0,ended:false,phase:G.demo?'ride':'paddle',padT:-PAD_LEAD,shoreT:0,shoreCall:false});trail.length=0;
+  Object.assign(G,{score:0,combo:0,comboT:0,bestMult:1,airs:0,bestChain:0,barrelTot:0,barrels:0,pearls:0,near:0,hits:0,wipes:0,endPending:false,runT:0,ended:false,phase:G.demo?'ride':'paddle',padT:-PAD_LEAD,shoreT:0,shoreCall:false});trail.length=0;
   G.goals=pickGoals(G.size);renderGoals();}
 
 /* ---------- goals HUD + end of run ---------- */
@@ -454,10 +457,18 @@ function endRun(wipedOut:boolean){
 }
 
 /* ---------- input ---------- */
+function queueTrick(kind:string){if(!pl.air||pl.tq.length>=3)return;pl.tq.push({kind,t:0});}
+let swipe:any=null;
+canvas.addEventListener('pointerdown',e=>{if(e.clientX>window.innerWidth*0.45)swipe={id:e.pointerId,x:e.clientX,y:e.clientY,used:false};},true);
+canvas.addEventListener('pointermove',e=>{if(!swipe||swipe.id!==e.pointerId||swipe.used||!pl.air||G.demo)return;
+  const dx=e.clientX-swipe.x,dy=e.clientY-swipe.y;if(Math.hypot(dx,dy)<28)return;
+  queueTrick(Math.abs(dx)>Math.abs(dy)?'spin':dy<0?'flip':'grab');swipe.used=true;});
+const endSwipe=e=>{if(swipe&&swipe.id===e.pointerId)swipe=null;};
+canvas.addEventListener('pointerup',endSwipe);canvas.addEventListener('pointercancel',endSwipe);
 let tuckBtn=false,dragId=null,lastY=0;const keys:any={};
 function takeOver(){if(G.demo){G.demo=false;const keep=B.state;resetRun();if(keep!=='idle')Object.assign(B,{state:'idle',next:4});el.demo.hidden=true;setTimeout(()=>el.hint.style.opacity='0',5000);}}
 canvas.addEventListener('pointerdown',e=>{if(G.ended)return;const wasDemo=G.demo;takeOver();if(!wasDemo)popUp();dragId=e.pointerId;lastY=e.clientY;canvas.setPointerCapture&&canvas.setPointerCapture(e.pointerId);});
-canvas.addEventListener('pointermove',e=>{if(e.pointerId!==dragId)return;const dy=e.clientY-lastY;lastY=e.clientY;pl.fT=clamp(pl.fT-dy/window.innerHeight*2.4,-0.05,1.2);});
+canvas.addEventListener('pointermove',e=>{if(e.pointerId!==dragId||(pl.air&&swipe&&swipe.id===e.pointerId))return;const dy=e.clientY-lastY;lastY=e.clientY;pl.fT=clamp(pl.fT-dy/window.innerHeight*2.4,-0.05,1.2);});
 const endDrag=e=>{if(e.pointerId===dragId)dragId=null;};
 canvas.addEventListener('pointerup',endDrag);canvas.addEventListener('pointercancel',endDrag);
 el.tuck.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();try{el.tuck.setPointerCapture(e.pointerId);}catch(_){}if(G.ended)return;const wasDemo=G.demo;takeOver();if(!wasDemo&&G.phase==='paddle'){popUp();return;}tuckBtn=true;el.tuck.classList.add('on');});
@@ -469,6 +480,7 @@ addEventListener('keydown',()=>SFX.init(),true);
 document.addEventListener('visibilitychange',()=>SFX.pause(document.hidden));
 $('snd').addEventListener('pointerdown',e=>e.stopPropagation());
 $('snd').addEventListener('click',e=>{SFX.init();const on=SFX.toggle();$('sndWaves').style.display=on?'':'none';$('sndX').style.display=on?'none':'';(e.currentTarget as HTMLElement).setAttribute('aria-label',on?'Mute sound':'Turn sound on');});
+addEventListener('keydown',e=>{if(pl.air&&!G.demo&&!e.repeat){const t={ArrowLeft:'spin',ArrowRight:'spin',KeyQ:'flip',KeyE:'grab'}[e.code];if(t){e.preventDefault();queueTrick(t);return;}}});
 addEventListener('keydown',e=>{if(['ArrowUp','ArrowDown','KeyW','KeyS','Space'].includes(e.code)){e.preventDefault();if(!G.ended){const wasDemo=G.demo;takeOver();if(!wasDemo&&e.code==='Space'&&G.phase==='paddle'&&!e.repeat){popUp();return;}}keys[e.code]=true;if(e.code==='Space'){tuckBtn=true;el.tuck.classList.add('on');}}});
 addEventListener('keyup',e=>{keys[e.code]=false;if(e.code==='Space')tuckUp();});
 $('again').addEventListener('click',()=>{el.card.hidden=true;G.demo=false;resetRun(true);});
@@ -555,19 +567,39 @@ function step(dt){
   if(pl.air){
     if(pl.airT===0){pl.z0=P.w*(1-pl.f);pl.y0=hgt(x,pl.z0,P);
       for(let k=0;k<40;k++)spray.emit(x+rnd(-1,1),pl.y0,pl.z0+rnd(-0.4,0.4),rnd(-3,1),rnd(2,6),rnd(-3,-0.5),rnd(0.5,1.1));
-      G.fovKick=6;SFX.air();}
+      G.fovKick=6;SFX.air();pl.tq.length=0;pl.tDone.length=0;pl.spinA=0;pl.flipA=0;
+      if(G.demo){queueTrick('spin');if(Math.random()<0.5)queueTrick(Math.random()<0.5?'flip':'grab');}
+      else if(G.airs<2)popup('AIR','Swipe right side for tricks');}
     pl.airT+=dt;const k=clamp(pl.airT/AIR_DUR,0,1);
+    /* run the current trick */
+    let tp=0,cur=pl.tq[0];
+    if(cur){if(cur.t===0)SFX.whoosh();cur.t+=dt;tp=clamp(cur.t/TRICKS[cur.kind].dur,0,1);
+      if(tp>=1){pl.tDone.push(cur.kind);if(cur.kind==='spin')pl.spinA+=Math.PI*2;if(cur.kind==='flip')pl.flipA+=Math.PI*2;pl.tq.shift();floater(TRICKS[cur.kind].name);cur=pl.tq[0];tp=0;}}
     z=lerp(pl.z0,P.w*0.22,k*k);y=lerp(pl.y0,hgt(x,P.w*0.22,P),k*k)+3.4*Math.sin(Math.PI*k);
     pl.fwd.set(1,k<0.5?1.0*(1-2*k):-0.3*Math.sin(Math.PI*(k-0.5)*2),-0.25).normalize();
     pl.side.crossVectors(pl.fwd,UP).normalize();pl.up.crossVectors(pl.side,pl.fwd);
     _m.makeBasis(pl.fwd,pl.up,pl.side);player.root.quaternion.setFromRotationMatrix(_m);
-    const e=k<0.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
-    player.spin.rotation.y=e*Math.PI*2;
-    player.spin.rotation.x=Math.sin(Math.PI*k)*0.25;
-    player.armF.rotation.z=-1.3*Math.sin(Math.PI*k);player.armB.rotation.z=1.1*Math.sin(Math.PI*k);player.upper.rotation.y=Math.sin(Math.PI*k)*0.9;
-    if(k>=1){pl.air=false;pl.landT=0.3;pl.qAir.copy(player.root.quaternion);pl.f=0.78;pl.vf=-0.6;pl.fT=Math.min(pl.fT,0.72);player.spin.rotation.set(0,0,0);
-      G.airs++;addCombo(2);award(650);popup('AIR 360');SFX.land();G.stopT=0.04;G.shake=0.1;
-      for(let q=0;q<30;q++)spray.emit(x+rnd(-1,1),hgt(x,P.w*0.22,P),P.w*0.22+rnd(-0.5,0.5),rnd(-4,0),rnd(1,4),rnd(-1,2),rnd(0.4,0.9));}
+    const ck=cur?cur.kind:'',ce=easeIO(tp);
+    player.spin.rotation.y=pl.spinA+(ck==='spin'?ce*Math.PI*2:0);
+    player.spin.rotation.z=pl.flipA+(ck==='flip'?ce*Math.PI*2:0);
+    player.spin.rotation.x=Math.sin(Math.PI*k)*0.2;
+    const grab=ck==='grab'?Math.sin(Math.PI*tp):0,tuckA=ck==='flip'?Math.sin(Math.PI*tp):0;
+    player.rider.scale.y=1-0.3*Math.max(grab,tuckA*0.7);
+    player.upper.rotation.z=-0.2-0.9*grab-0.5*tuckA;
+    player.armF.rotation.z=lerp(-1.3*Math.sin(Math.PI*k),-1.6,grab);player.armB.rotation.z=1.1*Math.sin(Math.PI*k)*(1-grab);
+    player.upper.rotation.y=Math.sin(Math.PI*k)*0.5*(1-grab);
+    if(k>=1){
+      /* landing: a trick caught mid-rotation is a crash; one that has barely started is just dropped */
+      const bad=cur&&tp>0.12&&tp<0.88;
+      if(cur&&tp>=0.88)pl.tDone.push(cur.kind);
+      pl.tq.length=0;pl.air=false;pl.landT=0.3;pl.qAir.copy(player.root.quaternion);pl.f=0.78;pl.vf=-0.6;pl.fT=Math.min(pl.fT,0.72);player.spin.rotation.set(0,0,0);player.rider.scale.y=1;
+      if(bad){pl.landT=0;wipeout(ck==='grab'?'LATE GRAB':'OVER-ROTATED');}
+      else{
+      const n=pl.tDone.length;let pts=250;pl.tDone.forEach((t,i)=>pts+=TRICKS[t].pts*(1+0.5*i));
+      const name=n?pl.tDone.map(t=>TRICKS[t].name).join(' + '):'AIR';
+      G.airs++;G.bestChain=Math.max(G.bestChain,n);addCombo(1+Math.min(n,3));award(pts);popup(name,n>1?n+'-trick combo':n?'Clean landing':'Swipe for tricks next time');SFX.land();G.stopT=0.04;G.shake=0.1;
+      if(n>=2)SFX.cheer();
+      for(let q=0;q<30;q++)spray.emit(x+rnd(-1,1),hgt(x,P.w*0.22,P),P.w*0.22+rnd(-0.5,0.5),rnd(-4,0),rnd(1,4),rnd(-1,2),rnd(0.4,0.9));}}
   }else{
     if(pl.wipe>0){pl.wipe-=dt;pl.f=lerp(pl.f,0.1,1-Math.exp(-dt*2));pl.vf=0;
       player.spin.rotation.set(T*7,0,Math.sin(T*5)*1.2);
