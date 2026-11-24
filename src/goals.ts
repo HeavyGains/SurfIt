@@ -2,7 +2,7 @@
 
 export interface RunStats {
   score: number; barrels: number; barrelTot: number; pearls: number;
-  airs: number; near: number; hits: number; wipes: number; bestMult: number;
+  airs: number; bestChain: number; near: number; hits: number; wipes: number; bestMult: number;
 }
 
 export interface Goal {
@@ -23,6 +23,7 @@ const POOL: Make[] = [
   sz => { const n = sz > 1.1 ? 3 : 2; return { kind: 'barrels', text: `Ride ${n} barrels`, prog: s => s.barrels / n }; },
   sz => { const n = Math.round(6 * sz); return { kind: 'pearls', text: `Grab ${n} pearls`, prog: s => s.pearls / n }; },
   () => ({ kind: 'airs', text: 'Land 2 airs', prog: s => s.airs / 2 }),
+  () => ({ kind: 'chain', text: 'Land a 2-trick combo', prog: s => s.bestChain / 2 }),
   () => ({ kind: 'near', text: '3 close calls', prog: s => s.near / 3 }),
   () => ({ kind: 'combo', text: 'Reach a ×5 combo', prog: s => (s.bestMult - 1) / 4 }),
   sz => { const n = Math.round(12000 * sz / 1000) * 1000; return { kind: 'score', text: `Score ${n.toLocaleString('en-US')}`, prog: s => s.score / n }; },
