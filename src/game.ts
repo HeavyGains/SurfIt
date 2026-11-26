@@ -263,7 +263,7 @@ const AIR_DUR=1.4;
 /* balance meter: after a landing, and late in a long barrel, the needle drifts off centre and keeps tipping;
    drag (the same thumb that carves) to push it back. Reach the end of the meter and you wipe out. */
 const BAL:any={on:false,kind:'',t:0,dur:0,b:0,A:0,noise:0,pay:null,shown:0};
-const BAL_K=1.6,BAL_LAND=1.3;
+const BAL_K=1.6,BAL_LAND=1.1;
 pl.steerIn=0;
 const landBal=()=>BAL.on&&BAL.kind==='land';
 function stopBalance(){const wasBarrel=BAL.kind==='barrel';BAL.on=false;BAL.pay=null;BAL.kind=wasBarrel?'barrelDone':'';}
@@ -607,7 +607,7 @@ function step(dt){
       /* touchdown: the trick only counts once you hold your balance through the meter */
       const n=pl.tDone.length;let pts=250;pl.tDone.forEach((t,i)=>pts+=TRICKS[t].pts*(1+0.5*i));
       const name=n?pl.tDone.map(t=>TRICKS[t].name).join(' + '):'AIR';
-      const off=Math.min(0.62,0.22+0.1*n+(cur&&tp>=0.88?0.18:0));
+      const off=Math.min(0.45,0.15+0.07*n+(cur&&tp>=0.88?0.12:0));
       startBalance('land',off*(Math.random()<0.5?-1:1),{n,pts,name});
       popup(name,BAL.shown<2?'Drag to keep the needle centred':'Hold your balance');BAL.shown++;SFX.land();G.stopT=0.04;G.shake=0.1;
       for(let q=0;q<30;q++)spray.emit(x+rnd(-1,1),hgt(x,P.w*0.22,P),P.w*0.22+rnd(-0.5,0.5),rnd(-4,0),rnd(1,4),rnd(-1,2),rnd(0.4,0.9));}}
@@ -661,8 +661,8 @@ function step(dt){
   /* balance meter */
   {const input=pl.steerIn;pl.steerIn=0;
    if(BAL.on){BAL.t+=dt;
-     if(BAL.kind==='barrel'){if(B.state!=='barrel'||pl.wipe>0)stopBalance();else{BAL.A=lerp(0.5,1.5,sstep(0,3,BAL.t));BAL.noise=lerp(0.25,0.55,sstep(0,3,BAL.t));}}
-     else BAL.A=2.0*sstep(0,0.3,BAL.t);
+     if(BAL.kind==='barrel'){if(B.state!=='barrel'||pl.wipe>0)stopBalance();else{BAL.A=lerp(0.4,1.0,sstep(0,3,BAL.t));BAL.noise=lerp(0.15,0.35,sstep(0,3,BAL.t));}}
+     else BAL.A=1.5*sstep(0,0.3,BAL.t);
    }
    if(BAL.on){
      const drift=BAL.A*BAL.b+BAL.noise*(Math.sin(T*6.3+BAL.t*2)+0.6*Math.sin(T*10.7+1.3));
@@ -674,9 +674,9 @@ function step(dt){
    }else if(B.state==='barrel'&&!(pl.wipe>0)&&pl.barrelT>1.6&&BAL.kind!=='barrelDone')startBalance('barrel',0,null);
    if(B.state!=='barrel'&&BAL.kind==='barrelDone')BAL.kind='';
   }
-  function startBalance(kind,b0,pay){Object.assign(BAL,{on:true,kind,t:0,dur:kind==='land'?BAL_LAND:99,b:b0,A:0,noise:kind==='land'?0.15:0.25,pay});}
+  function startBalance(kind,b0,pay){Object.assign(BAL,{on:true,kind,t:0,dur:kind==='land'?BAL_LAND:99,b:b0,A:0,noise:kind==='land'?0.1:0.15,pay});}
   function finishLanding(){
-    const {n,pts,name}=BAL.pay,stomp=Math.abs(BAL.b)<0.3;stopBalance();
+    const {n,pts,name}=BAL.pay,stomp=Math.abs(BAL.b)<0.4;stopBalance();
     G.airs++;G.bestChain=Math.max(G.bestChain,n);addCombo(1+Math.min(n,3)+(stomp?1:0));
     const p=award(pts+(stomp?150:0));
     popup(stomp?'STOMPED':'LANDED',name+' +'+fmt(p));if(stomp||n>=2)SFX.cheer();else SFX.whoosh();
