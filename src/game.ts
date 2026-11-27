@@ -548,6 +548,8 @@ function step(dt){
   if(keys.ArrowDown||keys.KeyS){if(!landBal())pl.fT=clamp(pl.fT-dt*1.7,-0.05,1.2);pl.steerIn-=dt*1.7;}
   /* while the landing meter is up your drag only balances; the surfer settles to mid-face on their own */
   if(landBal()&&!G.demo)pl.fT=lerp(pl.fT,0.58,1-Math.exp(-dt*3));
+  /* you can't steer while landing, so nothing can hit you then, nor for a moment after while you get your line back */
+  pl.graceT=landBal()?0.6:Math.max(0,(pl.graceT||0)-dt);
   if(G.phase==='paddle'){pl.fT=0.12;tuck=false;}
   if(G.phase==='shore'){pl.fT=lerp(pl.fT,0.32,1-Math.exp(-dt*2));tuck=false;}
 
@@ -772,7 +774,7 @@ function step(dt){
     o.mesh.visible=!(B.state!=='idle'&&barrelBlend>0.2&&Math.abs(o.x-pl.pos.x)<22)&&!(G.phase==='shore'&&Math.abs(o.x-pl.pos.x)<9);
     // collisions + close calls
     const dx=o.x-pl.pos.x,dz=oz-pl.pos.z;
-    if(!G.demo&&G.phase==='ride'&&B.state!=='barrel'&&!pl.air&&!pl.kick&&!(pl.wipe>0)&&!o.hit&&Math.abs(dx)<o.r+0.8&&Math.abs(dz)<o.r){
+    if(!G.demo&&G.phase==='ride'&&B.state!=='barrel'&&!pl.air&&!pl.kick&&!(pl.graceT>0)&&!(pl.wipe>0)&&!o.hit&&Math.abs(dx)<o.r+0.8&&Math.abs(dz)<o.r){
       o.hit=true;G.hits++;G.combo=0;G.comboT=0;G.shake=0.5;
       el.flash.style.opacity='0.35';setTimeout(()=>el.flash.style.opacity='0',90);
       popup('BONK!','Combo lost',true);SFX.bonk();
