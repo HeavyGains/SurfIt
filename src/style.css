@@ -142,3 +142,11 @@ body.titling .hud{opacity:0;pointer-events:none}
 .how{list-style:none;margin:0;padding:0;display:grid;gap:8px;text-align:left;max-height:46vh;overflow-y:auto}
 .how li{font:600 14px/1.35 var(--font-body)}
 .how b{display:block;font:800 11px/1.3 var(--font-body);letter-spacing:.12em;text-transform:uppercase;color:var(--aqua)}
+
+/* iPad and other big portrait screens: scale the HUD, controls and cards up so they match a phone's proportions */
+@media (orientation:portrait) and (min-width:600px){
+  .hud .top,.hud .wave,.hud .bottom,.hud .pops,.hud .paddle,.hud .bal,.card .box{zoom:1.35}
+}
+@media (orientation:portrait) and (min-width:900px){
+  .hud .top,.hud .wave,.hud .bottom,.hud .pops,.hud .paddle,.hud .bal,.card .box{zoom:1.6}
+}
