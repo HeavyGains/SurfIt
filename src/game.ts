@@ -517,8 +517,10 @@ addEventListener('keydown',e=>{if(titling()&&(e.code==='Enter'||e.code==='Space'
 /* portrait: 74° tall view on phones; on wider portrait screens (iPad) cap the side-to-side view at about
    the phone's so the surfer stays the same size on screen and the view crops sky and flat water instead */
 const PORTRAIT_HFOV=48*Math.PI/180;
+/* landscape: 54° tall view (iPad, desktop); very wide phone landscape caps the side-to-side view so the surfer isn't tiny */
+const LANDSCAPE_HFOV=84*Math.PI/180;
 function resize(){const w=window.innerWidth,h=window.innerHeight,a=w/h;renderer.setSize(w,h,false);camera.aspect=a;
-  camera.userData.baseFov=a<1?Math.min(74,2*Math.atan(Math.tan(PORTRAIT_HFOV/2)/a)*180/Math.PI):54;camera.updateProjectionMatrix();}
+  camera.userData.baseFov=a<1?Math.min(74,2*Math.atan(Math.tan(PORTRAIT_HFOV/2)/a)*180/Math.PI):Math.min(54,2*Math.atan(Math.tan(LANDSCAPE_HFOV/2)/a)*180/Math.PI);camera.updateProjectionMatrix();}
 addEventListener('resize',resize);resize();
 
 /* ---------- initial world ---------- */
