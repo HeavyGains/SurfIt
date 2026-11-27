@@ -133,3 +133,12 @@ body.outro .hud .wave,body.outro .hud .bottom,body.outro .hud .right{opacity:0}
 .bal .safe{position:absolute;left:0;right:0;top:30%;height:40%;border-radius:8px;background:var(--aqua);opacity:.55;box-shadow:0 0 10px rgba(95,240,214,.6)}
 .bal .mark{position:absolute;left:-5px;width:26px;height:6px;margin-top:-3px;border-radius:3px;background:var(--sun);box-shadow:0 0 8px rgba(255,196,107,.9);transition:background .15s}
 .bal.warn .mark{background:#ff5a5a;box-shadow:0 0 10px rgba(255,90,90,.9)}
+
+/* title screen: the demo rides behind it */
+body.titling .hud{opacity:0;pointer-events:none}
+.card.title .box{gap:12px}
+.logo{margin:0;font:400 64px/1 var(--font-display);color:var(--sun);text-shadow:0 4px 0 rgba(120,30,62,.85),0 10px 26px rgba(255,150,80,.35);letter-spacing:.01em}
+.card button.ghost{background:transparent;border:2px solid rgba(255,255,255,.4);font-size:17px;padding:11px 16px}
+.how{list-style:none;margin:0;padding:0;display:grid;gap:8px;text-align:left;max-height:46vh;overflow-y:auto}
+.how li{font:600 14px/1.35 var(--font-body)}
+.how b{display:block;font:800 11px/1.3 var(--font-body);letter-spacing:.12em;text-transform:uppercase;color:var(--aqua)}

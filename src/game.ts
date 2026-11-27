@@ -497,9 +497,19 @@ document.addEventListener('visibilitychange',()=>SFX.pause(document.hidden));
 $('snd').addEventListener('pointerdown',e=>e.stopPropagation());
 $('snd').addEventListener('click',e=>{SFX.init();const on=SFX.toggle();$('sndWaves').style.display=on?'':'none';$('sndX').style.display=on?'none':'';(e.currentTarget as HTMLElement).setAttribute('aria-label',on?'Mute sound':'Turn sound on');});
 addEventListener('keydown',e=>{if(pl.air&&!G.demo&&!e.repeat){const t={ArrowLeft:'spin',ArrowRight:'spin',KeyQ:'flip',KeyE:'grab'}[e.code];if(t){e.preventDefault();queueTrick(t);return;}}});
-addEventListener('keydown',e=>{if(['ArrowUp','ArrowDown','KeyW','KeyS','Space'].includes(e.code)){e.preventDefault();if(!G.ended){const wasDemo=G.demo;takeOver();if(!wasDemo&&e.code==='Space'&&G.phase==='paddle'&&!e.repeat){popUp();return;}}keys[e.code]=true;if(e.code==='Space'){tuckBtn=true;el.tuck.classList.add('on');}}});
+addEventListener('keydown',e=>{if(['ArrowUp','ArrowDown','KeyW','KeyS','Space'].includes(e.code)&&!titling()){e.preventDefault();if(!G.ended){const wasDemo=G.demo;takeOver();if(!wasDemo&&e.code==='Space'&&G.phase==='paddle'&&!e.repeat){popUp();return;}}keys[e.code]=true;if(e.code==='Space'){tuckBtn=true;el.tuck.classList.add('on');}}});
 addEventListener('keyup',e=>{keys[e.code]=false;if(e.code==='Space')tuckUp();});
 $('again').addEventListener('click',()=>{el.card.hidden=true;G.demo=false;resetRun(true);});
+/* title screen: the demo plays behind it until you press Play; first-time players see how to play straight away */
+const titleEl=$('title'),howEl=$('how'),howBtn=$('howBtn');
+const titling=()=>!titleEl.hidden;
+document.body.classList.add('titling');
+const showHow=(on:boolean)=>{howEl.hidden=!on;howBtn.setAttribute('aria-expanded',String(on));howBtn.textContent=on?'Hide how to play':'How to play';};
+try{if(!localStorage.getItem('surfit.seenHow')){showHow(true);localStorage.setItem('surfit.seenHow','1');}}catch(_){showHow(true);}
+howBtn.addEventListener('click',()=>showHow(howEl.hidden));
+function play(){if(!titling())return;titleEl.hidden=true;document.body.classList.remove('titling');SFX.init();takeOver();}
+$('play').addEventListener('click',play);
+addEventListener('keydown',e=>{if(titling()&&(e.code==='Enter'||e.code==='Space')){e.preventDefault();e.stopImmediatePropagation();play();}},true);
 
 /* ---------- resize ---------- */
 function resize(){const w=window.innerWidth,h=window.innerHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.userData.baseFov=w/h<1?74:54;camera.updateProjectionMatrix();}
