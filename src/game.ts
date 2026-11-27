@@ -267,14 +267,14 @@ const player=makeSurfer({board:0xfff0dc,stripe:0x18b3b0,skin:0xb5764f,top:0xff6b
 scene.add(player.root);
 const pl:any={tq:[],tDone:[],spinA:0,flipA:0,prone:0,wipe:0,camY:2,landT:0,qAir:new THREE.Quaternion(),f:0.45,vf:0,fT:0.45,xs:10,air:false,airT:0,z0:0,y0:0,lean:0,barrelT:0,lastSign:0,snapCd:0,pos:new THREE.Vector3(),fwd:new THREE.Vector3(1,0,0),side:new THREE.Vector3(0,0,1),up:new THREE.Vector3(0,1,0)};
 const AIR_DUR=1.4;
-/* balance meter: after a landing, and late in a long barrel, the needle drifts off centre and keeps tipping;
+/* balance meter: after a landing the needle drifts off centre and keeps tipping;
    drag (the same thumb that carves) to push it back. Reach the end of the meter and you wipe out. */
 const BAL:any={on:false,kind:'',t:0,dur:0,b:0,A:0,noise:0,pay:null,shown:0};
 const BAL_K=1.6,BAL_LAND=1.1;
 pl.steerIn=0;pl.kick=false;pl.kickK=0;
 const coLive=()=>CO.state==='warn'||CO.state==='roll';
 const landBal=()=>BAL.on&&BAL.kind==='land';
-function stopBalance(){const wasBarrel=BAL.kind==='barrel';BAL.on=false;BAL.pay=null;BAL.kind=wasBarrel?'barrelDone':'';}
+function stopBalance(){BAL.on=false;BAL.pay=null;BAL.kind='';}
 /* air tricks: queued by swipes on the right side, played one after another; land mid-rotation and you wipe out */
 const TRICKS:any={spin:{dur:0.42,pts:400,name:'SPIN'},flip:{dur:0.55,pts:650,name:'FLIP'},grab:{dur:0.38,pts:300,name:'GRAB'}};
 const easeIO=(k:number)=>k<0.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
@@ -700,21 +700,16 @@ function step(dt){
 
   /* balance meter */
   {const input=pl.steerIn;pl.steerIn=0;
-   if(BAL.on){BAL.t+=dt;
-     if(BAL.kind==='barrel'){if(B.state!=='barrel'||pl.wipe>0)stopBalance();else{BAL.A=lerp(0.4,1.0,sstep(0,3,BAL.t));BAL.noise=lerp(0.15,0.35,sstep(0,3,BAL.t));}}
-     else BAL.A=1.5*sstep(0,0.3,BAL.t);
-   }
+   if(BAL.on){BAL.t+=dt;BAL.A=1.5*sstep(0,0.3,BAL.t);}
    if(BAL.on){
      const drift=BAL.A*BAL.b+BAL.noise*(Math.sin(T*6.3+BAL.t*2)+0.6*Math.sin(T*10.7+1.3));
      const inp=G.demo?-BAL.b*Math.min(1,dt*7)/BAL_K*1.4:input;
      BAL.b+=drift*dt+BAL_K*inp;
-     if(Math.abs(BAL.b)>=1){BAL.b=Math.sign(BAL.b);const k=BAL.kind;stopBalance();
-       wipeout('LOST BALANCE');if(k==='barrel'&&B.state==='barrel'){B.state='closing';B.t=0;}}
+     if(Math.abs(BAL.b)>=1){BAL.b=Math.sign(BAL.b);stopBalance();wipeout('LOST BALANCE');}
      else if(BAL.kind==='land'&&BAL.t>=BAL.dur)finishLanding();
-   }else if(B.state==='barrel'&&!(pl.wipe>0)&&pl.barrelT>1.6&&BAL.kind!=='barrelDone')startBalance('barrel',0,null);
-   if(B.state!=='barrel'&&BAL.kind==='barrelDone')BAL.kind='';
+   }
   }
-  function startBalance(kind,b0,pay){Object.assign(BAL,{on:true,kind,t:0,dur:kind==='land'?BAL_LAND:99,b:b0,A:0,noise:kind==='land'?0.1:0.15,pay});}
+  function startBalance(kind,b0,pay){Object.assign(BAL,{on:true,kind,t:0,dur:BAL_LAND,b:b0,A:0,noise:0.1,pay});}
   function finishLanding(){
     const {n,pts,name}=BAL.pay,stomp=Math.abs(BAL.b)<0.4;stopBalance();
     G.airs++;G.bestChain=Math.max(G.bestChain,n);addCombo(1+Math.min(n,3)+(stomp?1:0));
