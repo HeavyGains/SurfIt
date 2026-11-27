@@ -150,3 +150,16 @@ body.titling .hud{opacity:0;pointer-events:none}
 @media (orientation:portrait) and (min-width:900px){
   .hud .top,.hud .wave,.hud .bottom,.hud .pops,.hud .paddle,.hud .bal,.card .box{zoom:1.6}
 }
+
+/* phone held sideways: short screen, so shrink the HUD, keep the wave bar and goals in a left column,
+   and fit the cards (they scroll if they still don't fit) */
+@media (orientation:landscape) and (max-height:500px){
+  .hud .top,.hud .wave,.hud .bottom,.hud .pops,.hud .paddle,.hud .bal{zoom:.8}
+  .wave{right:auto;width:min(420px,50vw)}
+  .wave .row{white-space:nowrap}
+  .bal{top:22%;height:34vh}
+  .hint{max-width:46vw}
+  .card{overflow-y:auto;place-items:safe center;padding-top:max(8px,env(safe-area-inset-top,0px));padding-bottom:max(8px,env(safe-area-inset-bottom,0px))}
+  .card .box{zoom:.78}
+  .how{max-height:none}
+}
