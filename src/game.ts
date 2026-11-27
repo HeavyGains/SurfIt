@@ -477,7 +477,7 @@ function queueTrick(kind:string){if(!pl.air||pl.tq.length>=3)return;pl.tq.push({
 let swipe:any=null;
 canvas.addEventListener('pointerdown',e=>{if(e.clientX>window.innerWidth*0.45)swipe={id:e.pointerId,x:e.clientX,y:e.clientY,used:false};},true);
 canvas.addEventListener('pointermove',e=>{if(!swipe||swipe.id!==e.pointerId||swipe.used||!pl.air||G.demo)return;
-  const dx=e.clientX-swipe.x,dy=e.clientY-swipe.y;if(Math.hypot(dx,dy)<28)return;
+  const dx=e.clientX-swipe.x,dy=e.clientY-swipe.y;if(Math.hypot(dx,dy)<18)return;
   queueTrick(Math.abs(dx)>Math.abs(dy)?'spin':dy<0?'flip':'grab');swipe.used=true;});
 const endSwipe=e=>{if(swipe&&swipe.id===e.pointerId)swipe=null;};
 canvas.addEventListener('pointerup',endSwipe);canvas.addEventListener('pointercancel',endSwipe);
@@ -604,7 +604,7 @@ function step(dt){
     pl.vf+=((pl.fT-pl.f)*18-pl.vf*7)*dt;
     pl.f+=pl.vf*dt;
     if(pl.f>=0.97){
-      if(pl.vf>0.75&&!tuck&&!inPocket&&!BAL.on&&!coLive()){pl.air=true;pl.airT=0;}
+      if((pl.vf>0.5||pl.fT>1.05)&&!tuck&&!inPocket&&!BAL.on&&!coLive()){pl.air=true;pl.airT=0;}
       pl.f=0.97;if(!pl.air)pl.vf=Math.min(pl.vf,0);
     }
     if(pl.f<0.02){pl.f=0.02;pl.vf=Math.max(pl.vf,0);}
@@ -841,6 +841,7 @@ function step(dt){
      const key=G.goals.map(g=>g.done?1:g.failed?2:0).join('');
      if(key!==hud.g){hud.g=key;renderGoals();}
      for(const g of fresh){popup('GOAL!',g.text);SFX.cheer();}}
+   const ab=pl.air||pl.landT>0;if(ab!==hud.ab){hud.ab=ab;document.body.classList.toggle('airborne',ab);}
    const gh=G.demo;if(gh!==hud.gh){hud.gh=gh;el.goals.hidden=gh;}
    const pv=!G.demo&&G.phase==='paddle';if(pv!==hud.pv){hud.pv=pv;el.paddle.hidden=!pv;}
    const bv=BAL.on&&(BAL.kind==='land'||BAL.t>0.25);if(bv!==hud.bv){hud.bv=bv;el.bal.hidden=!bv;}
