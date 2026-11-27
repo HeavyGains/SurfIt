@@ -14,6 +14,11 @@ npm run smoke    # after a build: loads the game headless and fails on errors
 
 The smoke test needs Playwright's Chromium (`npx playwright install chromium`).
 
+## Play it
+
+Every merge to `main` publishes the game to GitHub Pages: https://heavygains.github.io/SurfIt/
+(workflow in `.github/workflows/pages.yml`; repo Settings > Pages > Source must be "GitHub Actions").
+
 ## Layout
 
 | File | What it holds |
