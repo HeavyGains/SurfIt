@@ -484,7 +484,9 @@ canvas.addEventListener('pointerup',endSwipe);canvas.addEventListener('pointerca
 let tuckBtn=false,dragId=null,lastY=0;const keys:any={};
 function takeOver(){if(G.demo){G.demo=false;const keep=B.state;resetRun();if(keep!=='idle')Object.assign(B,{state:'idle',next:4});el.demo.hidden=true;setTimeout(()=>el.hint.style.opacity='0',5000);}}
 canvas.addEventListener('pointerdown',e=>{if(G.ended)return;const wasDemo=G.demo;takeOver();if(!wasDemo)popUp();dragId=e.pointerId;lastY=e.clientY;canvas.setPointerCapture&&canvas.setPointerCapture(e.pointerId);});
-canvas.addEventListener('pointermove',e=>{if(e.pointerId!==dragId||(pl.air&&swipe&&swipe.id===e.pointerId))return;const dy=e.clientY-lastY;lastY=e.clientY;pl.steerIn-=dy/window.innerHeight*2.4;if(!landBal())pl.fT=clamp(pl.fT-dy/window.innerHeight*2.4,-0.05,1.2);});
+/* steering is per fraction of screen height, capped at phone height so a tall iPad doesn't need a longer thumb drag */
+const dragH=()=>Math.min(window.innerHeight,940);
+canvas.addEventListener('pointermove',e=>{if(e.pointerId!==dragId||(pl.air&&swipe&&swipe.id===e.pointerId))return;const dy=e.clientY-lastY;lastY=e.clientY;pl.steerIn-=dy/dragH()*2.4;if(!landBal())pl.fT=clamp(pl.fT-dy/dragH()*2.4,-0.05,1.2);});
 const endDrag=e=>{if(e.pointerId===dragId)dragId=null;};
 canvas.addEventListener('pointerup',endDrag);canvas.addEventListener('pointercancel',endDrag);
 el.tuck.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();try{el.tuck.setPointerCapture(e.pointerId);}catch(_){}if(G.ended)return;const wasDemo=G.demo;takeOver();if(!wasDemo&&G.phase==='paddle'){popUp();return;}tuckBtn=true;el.tuck.classList.add('on');});
@@ -512,7 +514,11 @@ $('play').addEventListener('click',play);
 addEventListener('keydown',e=>{if(titling()&&(e.code==='Enter'||e.code==='Space')){e.preventDefault();e.stopImmediatePropagation();play();}},true);
 
 /* ---------- resize ---------- */
-function resize(){const w=window.innerWidth,h=window.innerHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.userData.baseFov=w/h<1?74:54;camera.updateProjectionMatrix();}
+/* portrait: 74° tall view on phones; on wider portrait screens (iPad) cap the side-to-side view at about
+   the phone's so the surfer stays the same size on screen and the view crops sky and flat water instead */
+const PORTRAIT_HFOV=48*Math.PI/180;
+function resize(){const w=window.innerWidth,h=window.innerHeight,a=w/h;renderer.setSize(w,h,false);camera.aspect=a;
+  camera.userData.baseFov=a<1?Math.min(74,2*Math.atan(Math.tan(PORTRAIT_HFOV/2)/a)*180/Math.PI):54;camera.updateProjectionMatrix();}
 addEventListener('resize',resize);resize();
 
 /* ---------- initial world ---------- */
