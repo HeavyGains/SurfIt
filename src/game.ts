@@ -19,6 +19,10 @@ const V=11;          // how fast the wave peels (world units / s)
 const RUN_LEN=(window as any).__RUN_LEN||75;    // seconds per wave
 let T=0, waveScale=1;
 const B={state:'idle',t:0,amt:0,cx:10,next:9};
+/* closeout: once per wave a section ahead pitches all at once (thr), turns to whitewater (foam) and rolls
+   down the line at you. x is the near edge of the section, which reaches CO_LEN further ahead. */
+const CO={state:'idle',t:0,x:0,thr:0,foam:0,at:0,done:false};
+const CO_LEN=30,CO_START=11,CO_WARN=1.2,CO_ROLL=4,CO_PASS=16;
 const SIZES:[number,string][]=[[0.8,'Head high'],[1,'Overhead'],[1.25,'Double overhead']];
 const SUN=new THREE.Vector3(-0.85,0.11,-0.52).normalize();
 
@@ -56,9 +60,12 @@ const mkP=()=>({H:0,c:0,w:0,p:0,broken:0});
 const _PL=mkP(),_PO=mkP(),_PP=mkP(),_PS=mkP();
 function params(x:number,o?:any){
   const edge=sstep(-112,-82,x)*sstep(152,120,x);
-  const broken=sstep(-24,-38,x);
+  let broken=sstep(-24,-38,x);
+  const cw=CO.state!=='idle'?sstep(CO.x-6,CO.x,x)*sstep(CO.x+CO_LEN+6,CO.x+CO_LEN,x):0;
+  if(cw>0)broken=Math.max(broken,CO.foam*cw);
   let c=(1-sstep(-10,6,x))*(1-broken);
   if(B.amt>0){const win=sstep(B.cx-19,B.cx-11,x)*sstep(B.cx+12,B.cx+5,x);c=Math.max(c,B.amt*win);}
+  if(cw>0)c=Math.max(c,CO.thr*cw*(1-CO.foam));
   let H=5.4-2.4*sstep(14,95,x);
   H=H*(1-broken)+2.7*broken;
   H*=edge*waveScale*(1+0.035*Math.sin(T*0.9+x*0.06));
@@ -260,13 +267,14 @@ const player=makeSurfer({board:0xfff0dc,stripe:0x18b3b0,skin:0xb5764f,top:0xff6b
 scene.add(player.root);
 const pl:any={tq:[],tDone:[],spinA:0,flipA:0,prone:0,wipe:0,camY:2,landT:0,qAir:new THREE.Quaternion(),f:0.45,vf:0,fT:0.45,xs:10,air:false,airT:0,z0:0,y0:0,lean:0,barrelT:0,lastSign:0,snapCd:0,pos:new THREE.Vector3(),fwd:new THREE.Vector3(1,0,0),side:new THREE.Vector3(0,0,1),up:new THREE.Vector3(0,1,0)};
 const AIR_DUR=1.4;
-/* balance meter: after a landing, and late in a long barrel, the needle drifts off centre and keeps tipping;
+/* balance meter: after a landing the needle drifts off centre and keeps tipping;
    drag (the same thumb that carves) to push it back. Reach the end of the meter and you wipe out. */
 const BAL:any={on:false,kind:'',t:0,dur:0,b:0,A:0,noise:0,pay:null,shown:0};
 const BAL_K=1.6,BAL_LAND=1.1;
-pl.steerIn=0;
+pl.steerIn=0;pl.kick=false;pl.kickK=0;
+const coLive=()=>CO.state==='warn'||CO.state==='roll';
 const landBal=()=>BAL.on&&BAL.kind==='land';
-function stopBalance(){const wasBarrel=BAL.kind==='barrel';BAL.on=false;BAL.pay=null;BAL.kind=wasBarrel?'barrelDone':'';}
+function stopBalance(){BAL.on=false;BAL.pay=null;BAL.kind='';}
 /* air tricks: queued by swipes on the right side, played one after another; land mid-rotation and you wipe out */
 const TRICKS:any={spin:{dur:0.42,pts:400,name:'SPIN'},flip:{dur:0.55,pts:650,name:'FLIP'},grab:{dur:0.38,pts:300,name:'GRAB'}};
 const easeIO=(k:number)=>k<0.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
@@ -428,7 +436,8 @@ function award(base){const pts=Math.round(base*mult());G.score+=pts;floater('+'+
 function resetRun(next?:boolean){const sz=SIZES[Math.floor(Math.random()*3)];G.size=sz[0];if(next)G.wave++;el.waveName.textContent='Wave '+G.wave+' · '+sz[1];
   Object.assign(B,{state:'idle',t:0,amt:0,next:rnd(6,10)});el.tuck.classList.remove('call');pl.wipe=0;stopBalance();BAL.kind='';
   Object.assign(G,{score:0,combo:0,comboT:0,bestMult:1,airs:0,bestChain:0,barrelTot:0,barrels:0,pearls:0,near:0,hits:0,wipes:0,endPending:false,runT:0,ended:false,phase:G.demo?'ride':'paddle',padT:-PAD_LEAD,shoreT:0,shoreCall:false});trail.length=0;
-  G.goals=pickGoals(G.size);renderGoals();}
+  G.goals=pickGoals(G.size);renderGoals();
+  Object.assign(CO,{state:'idle',t:0,thr:0,foam:0,at:rnd(0.35,0.55)*RUN_LEN,done:false});pl.kick=false;pl.kickK=0;}
 
 /* ---------- goals HUD + end of run ---------- */
 function renderGoals(){
@@ -468,7 +477,7 @@ function queueTrick(kind:string){if(!pl.air||pl.tq.length>=3)return;pl.tq.push({
 let swipe:any=null;
 canvas.addEventListener('pointerdown',e=>{if(e.clientX>window.innerWidth*0.45)swipe={id:e.pointerId,x:e.clientX,y:e.clientY,used:false};},true);
 canvas.addEventListener('pointermove',e=>{if(!swipe||swipe.id!==e.pointerId||swipe.used||!pl.air||G.demo)return;
-  const dx=e.clientX-swipe.x,dy=e.clientY-swipe.y;if(Math.hypot(dx,dy)<28)return;
+  const dx=e.clientX-swipe.x,dy=e.clientY-swipe.y;if(Math.hypot(dx,dy)<18)return;
   queueTrick(Math.abs(dx)>Math.abs(dy)?'spin':dy<0?'flip':'grab');swipe.used=true;});
 const endSwipe=e=>{if(swipe&&swipe.id===e.pointerId)swipe=null;};
 canvas.addEventListener('pointerup',endSwipe);canvas.addEventListener('pointercancel',endSwipe);
@@ -539,12 +548,15 @@ function step(dt){
   if(keys.ArrowDown||keys.KeyS){if(!landBal())pl.fT=clamp(pl.fT-dt*1.7,-0.05,1.2);pl.steerIn-=dt*1.7;}
   /* while the landing meter is up your drag only balances; the surfer settles to mid-face on their own */
   if(landBal()&&!G.demo)pl.fT=lerp(pl.fT,0.58,1-Math.exp(-dt*3));
+  /* you can't steer while landing, so nothing can hit you then, nor for a moment after while you get your line back */
+  pl.graceT=landBal()?0.6:Math.max(0,(pl.graceT||0)-dt);
   if(G.phase==='paddle'){pl.fT=0.12;tuck=false;}
   if(G.phase==='shore'){pl.fT=lerp(pl.fT,0.32,1-Math.exp(-dt*2));tuck=false;}
 
   const inPocket=false;
   if(G.phase==='ride')B.next-=dt;
-  if(B.state==='idle'&&B.next<=0&&G.phase==='ride'&&!pl.air&&!(pl.wipe>0)){B.state='forming';B.t=0;B.cx=pl.xs;popup('BARREL FORMING','Hold TUCK');el.tuck.classList.add('call');}
+  const coSoon=CO.state!=='idle'||(!G.demo&&!CO.done&&G.runT>CO.at-5);
+  if(B.state==='idle'&&B.next<=0&&G.phase==='ride'&&!pl.air&&!(pl.wipe>0)&&!coSoon){B.state='forming';B.t=0;B.cx=pl.xs;popup('BARREL FORMING','Hold TUCK');el.tuck.classList.add('call');}
   else if(B.state==='forming'){B.t+=dt;B.amt=sstep(0,2.8,B.t);
     if(tuck&&B.t>0.15&&!pl.air&&!(pl.wipe>0)){B.state='barrel';B.t=0;el.tuck.classList.remove('call');
       G.slowT=1.3;G.fovKick=-8;pearlN=0;pearlT=0.4;popup('TUCKED IN','Grab the pearls');SFX.tube();for(let q=0;q<40;q++){const lx=pl.xs+rnd(-8,6);const LP=params(lx,_PL);lipPoint(lx,LP,LK-1,lipV);spray.emit(lipV.x,lipV.y,lipV.z,rnd(-1,1),rnd(1,4),rnd(0.5,3),rnd(0.8,1.5));}}
@@ -558,12 +570,41 @@ function step(dt){
   if(B.state!=='idle')B.cx+=(pl.xs-B.cx)*(1-Math.exp(-dt*3));
   if(tuck)pl.fT=B.state==='barrel'?clamp(pl.fT,0.13,0.74):clamp(pl.fT,0.3,0.55);
 
+  /* closeout: the section ahead pitches, turns to whitewater and rolls at you.
+     Get to the top and you kick out over the back; stay low at the bottom and you outrun it; anywhere else it closes on you. */
+  if(CO.state==='idle'){
+    if(!CO.done&&!G.demo&&!G.ended&&G.phase==='ride'&&G.runT>=CO.at&&B.state==='idle'&&!pl.air&&!(pl.wipe>0)&&!BAL.on){
+      Object.assign(CO,{state:'warn',t:0,x:pl.pos.x+CO_START,thr:0,foam:0,done:true});B.next=Math.max(B.next,10);
+      popup('CLOSEOUT!','Kick out up top, or go low and outrun it');SFX.tube();G.shake=0.25;}
+  }else{
+    CO.t+=dt;
+    if(CO.state==='warn'){CO.thr=sstep(0,0.5,CO.t);CO.foam=sstep(0.35,CO_WARN,CO.t);
+      for(let q=0;q<4;q++){const lx=CO.x+rnd(0,CO_LEN);const LP=params(lx,_PL);lipPoint(lx,LP,LK-1,lipV);spray.emit(lipV.x,lipV.y,lipV.z,rnd(-2,2),rnd(2,6),rnd(0,4),rnd(0.6,1.2));}
+      if(CO.t>=CO_WARN){CO.state='roll';CO.t=0;}}
+    else if(CO.state==='roll'){CO.x-=CO_ROLL*dt;
+      if(G.phase!=='ride'||G.ended)CO.state='pass';
+      else if(CO.x<=pl.pos.x+0.8){CO.state='pass';
+        if(pl.kick){addCombo(2);const p=award(350);popup('KICKED OUT','Over the back +'+fmt(p));SFX.cheer();}
+        else if(pl.wipe>0){/* already down */}
+        else if(pl.f<0.25&&!pl.air){addCombo(1);const p=award(250);popup('OUTRAN IT','Straightened out +'+fmt(p));SFX.whoosh();G.shake=0.3;}
+        else wipeout('CLOSED OUT');}}
+    else{CO.x-=CO_PASS*dt;if(CO.x+CO_LEN<-40){CO.state='idle';CO.thr=CO.foam=0;}}
+    /* whitewater boiling along the near edge of the section */
+    if(CO.foam>0.3)for(let q=0;q<4;q++){const lx=CO.x+rnd(-1,4);const LP=params(lx,_PL);const lz=rnd(-0.5,LP.w);
+      spray.emit(lx,hgt(lx,lz,LP)+0.3,lz,rnd(-4,-1),rnd(3,7),rnd(-1,2),rnd(0.5,1.0));}
+  }
+  /* kick out: reach the top while the closeout is coming and you pull over the back instead of launching an air */
+  if(!pl.kick&&coLive()&&!pl.air&&!(pl.wipe>0)&&pl.f>=0.93){pl.kick=true;pl.vf=0;SFX.whoosh();floater('KICK OUT');}
+  if(pl.kick&&(CO.state==='idle'||(CO.state==='pass'&&CO.x+CO_LEN<pl.pos.x-3))){pl.kick=false;pl.f=0.85;pl.fT=0.6;pl.vf=-0.5;}
+  pl.kickK+=((pl.kick?1:0)-pl.kickK)*(1-Math.exp(-dt*5));
+  if(pl.kick){pl.f=0.97;pl.vf=0;}
+
   /* steering spring */
-  if(!pl.air&&!(pl.wipe>0)){
+  if(!pl.air&&!(pl.wipe>0)&&!pl.kick){
     pl.vf+=((pl.fT-pl.f)*18-pl.vf*7)*dt;
     pl.f+=pl.vf*dt;
     if(pl.f>=0.97){
-      if(pl.vf>0.75&&!tuck&&!inPocket&&!BAL.on){pl.air=true;pl.airT=0;}
+      if((pl.vf>0.5||pl.fT>1.05)&&!tuck&&!inPocket&&!BAL.on&&!coLive()){pl.air=true;pl.airT=0;}
       pl.f=0.97;if(!pl.air)pl.vf=Math.min(pl.vf,0);
     }
     if(pl.f<0.02){pl.f=0.02;pl.vf=Math.max(pl.vf,0);}
@@ -616,6 +657,7 @@ function step(dt){
       player.spin.rotation.set(T*7,0,Math.sin(T*5)*1.2);
       if(pl.wipe<=0){player.spin.rotation.set(0,0,0);pl.f=pl.fT=0.4;if(G.endPending&&!G.ended)endRun(true);}}
     z=P.w*(1-pl.f);y=hgt(x,z,P);
+    if(pl.kickK>0.002){z=lerp(z,-3.4,pl.kickK);y=hgt(x,z,P)+1.1*Math.sin(Math.PI*pl.kickK);}
     surfaceFrame(x,z,P,V,-P.w*pl.vf*0.9,player.root,pl.fwd,pl.up,pl.side);
     pl.lean+=(clamp(-pl.vf*0.45,-0.55,0.55)-pl.lean)*(1-Math.exp(-dt*6));
     _q.setFromAxisAngle(pl.fwd,pl.lean);player.root.quaternion.premultiply(_q);
@@ -651,7 +693,7 @@ function step(dt){
     player.head.rotation.y+=(-u.rotation.y*0.7-player.head.rotation.y)*k;
   }
   function wipeout(msg){
-    if(pl.wipe>0)return;pl.wipe=1.6;stopBalance();pl.barrelT=0;pl.air=false;G.combo=0;G.comboT=0;G.shake=0.7;
+    if(pl.wipe>0)return;pl.wipe=1.6;pl.kick=false;stopBalance();pl.barrelT=0;pl.air=false;G.combo=0;G.comboT=0;G.shake=0.7;
     el.flash.style.opacity='0.5';setTimeout(()=>el.flash.style.opacity='0',120);
     if(!G.demo&&!G.ended){G.wipes++;if(G.wipes>=MAX_WIPES)G.endPending=true;}
     popup(msg,G.demo?'Wiped out':'Wipeout '+G.wipes+' of '+MAX_WIPES,true);SFX.crash();el.tuck.classList.remove('call');
@@ -660,21 +702,16 @@ function step(dt){
 
   /* balance meter */
   {const input=pl.steerIn;pl.steerIn=0;
-   if(BAL.on){BAL.t+=dt;
-     if(BAL.kind==='barrel'){if(B.state!=='barrel'||pl.wipe>0)stopBalance();else{BAL.A=lerp(0.4,1.0,sstep(0,3,BAL.t));BAL.noise=lerp(0.15,0.35,sstep(0,3,BAL.t));}}
-     else BAL.A=1.5*sstep(0,0.3,BAL.t);
-   }
+   if(BAL.on){BAL.t+=dt;BAL.A=1.5*sstep(0,0.3,BAL.t);}
    if(BAL.on){
      const drift=BAL.A*BAL.b+BAL.noise*(Math.sin(T*6.3+BAL.t*2)+0.6*Math.sin(T*10.7+1.3));
      const inp=G.demo?-BAL.b*Math.min(1,dt*7)/BAL_K*1.4:input;
      BAL.b+=drift*dt+BAL_K*inp;
-     if(Math.abs(BAL.b)>=1){BAL.b=Math.sign(BAL.b);const k=BAL.kind;stopBalance();
-       wipeout('LOST BALANCE');if(k==='barrel'&&B.state==='barrel'){B.state='closing';B.t=0;}}
+     if(Math.abs(BAL.b)>=1){BAL.b=Math.sign(BAL.b);stopBalance();wipeout('LOST BALANCE');}
      else if(BAL.kind==='land'&&BAL.t>=BAL.dur)finishLanding();
-   }else if(B.state==='barrel'&&!(pl.wipe>0)&&pl.barrelT>1.6&&BAL.kind!=='barrelDone')startBalance('barrel',0,null);
-   if(B.state!=='barrel'&&BAL.kind==='barrelDone')BAL.kind='';
+   }
   }
-  function startBalance(kind,b0,pay){Object.assign(BAL,{on:true,kind,t:0,dur:kind==='land'?BAL_LAND:99,b:b0,A:0,noise:kind==='land'?0.1:0.15,pay});}
+  function startBalance(kind,b0,pay){Object.assign(BAL,{on:true,kind,t:0,dur:BAL_LAND,b:b0,A:0,noise:0.1,pay});}
   function finishLanding(){
     const {n,pts,name}=BAL.pay,stomp=Math.abs(BAL.b)<0.4;stopBalance();
     G.airs++;G.bestChain=Math.max(G.bestChain,n);addCombo(1+Math.min(n,3)+(stomp?1:0));
@@ -706,7 +743,7 @@ function step(dt){
   inBarrelPrev=inBarrel;
 
   /* points for riding */
-  if(G.phase!=='paddle'&&!pl.air&&!(pl.wipe>0))G.score+=dt*28*(0.5+1.5*pl.f)*mult();
+  if(G.phase!=='paddle'&&!pl.air&&!pl.kick&&!(pl.wipe>0))G.score+=dt*28*(0.5+1.5*pl.f)*mult();
   if(G.comboT>0){G.comboT-=dt;if(G.comboT<=0){G.combo=0;}}
 
   updatePearls(dt);
@@ -737,13 +774,13 @@ function step(dt){
     o.mesh.visible=!(B.state!=='idle'&&barrelBlend>0.2&&Math.abs(o.x-pl.pos.x)<22)&&!(G.phase==='shore'&&Math.abs(o.x-pl.pos.x)<9);
     // collisions + close calls
     const dx=o.x-pl.pos.x,dz=oz-pl.pos.z;
-    if(!G.demo&&G.phase==='ride'&&B.state!=='barrel'&&!pl.air&&!(pl.wipe>0)&&!o.hit&&Math.abs(dx)<o.r+0.8&&Math.abs(dz)<o.r){
+    if(!G.demo&&G.phase==='ride'&&B.state!=='barrel'&&!pl.air&&!pl.kick&&!(pl.graceT>0)&&!(pl.wipe>0)&&!o.hit&&Math.abs(dx)<o.r+0.8&&Math.abs(dz)<o.r){
       o.hit=true;G.hits++;G.combo=0;G.comboT=0;G.shake=0.5;
       el.flash.style.opacity='0.35';setTimeout(()=>el.flash.style.opacity='0',90);
       popup('BONK!','Combo lost',true);SFX.bonk();
       for(let q=0;q<30;q++)spray.emit(pl.pos.x,pl.pos.y+0.3,pl.pos.z,rnd(-4,3),rnd(2,5),rnd(-3,3),rnd(0.4,0.9));
       pl.vf+=(pl.f>0.5?-1.2:1.2);
-    }else if(!G.demo&&G.phase==='ride'&&B.state!=='barrel'&&!o.hit&&px>pl.pos.x&&o.x<=pl.pos.x&&Math.abs(dz)<3.2&&!pl.air){
+    }else if(!G.demo&&G.phase==='ride'&&B.state!=='barrel'&&!o.hit&&px>pl.pos.x&&o.x<=pl.pos.x&&Math.abs(dz)<3.2&&!pl.air&&!pl.kick){
       G.near++;addCombo(1);award(150);popup('CLOSE CALL');
     }
     if(o.x<-34||(o.z!==undefined&&o.z<-9)){scene.remove(o.mesh);obstacles.splice(i,1);spawn(0);}
@@ -804,6 +841,7 @@ function step(dt){
      const key=G.goals.map(g=>g.done?1:g.failed?2:0).join('');
      if(key!==hud.g){hud.g=key;renderGoals();}
      for(const g of fresh){popup('GOAL!',g.text);SFX.cheer();}}
+   const ab=pl.air||pl.landT>0;if(ab!==hud.ab){hud.ab=ab;document.body.classList.toggle('airborne',ab);}
    const gh=G.demo;if(gh!==hud.gh){hud.gh=gh;el.goals.hidden=gh;}
    const pv=!G.demo&&G.phase==='paddle';if(pv!==hud.pv){hud.pv=pv;el.paddle.hidden=!pv;}
    const bv=BAL.on&&(BAL.kind==='land'||BAL.t>0.25);if(bv!==hud.bv){hud.bv=bv;el.bal.hidden=!bv;}
