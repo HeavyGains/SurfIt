@@ -1,6 +1,6 @@
 /* SurfIt offline support. The page is fetched fresh when online (so each deploy shows up straight away)
    and falls back to the cached copy offline; built assets have hashed names, so they're cached on first use. */
-const CACHE = 'surfit-v1';
+const CACHE = 'surfit-v2';
 
 self.addEventListener('install', e => {
   e.waitUntil((async () => {
