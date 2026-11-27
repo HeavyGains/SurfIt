@@ -269,7 +269,7 @@ const pl:any={tq:[],tDone:[],spinA:0,flipA:0,prone:0,wipe:0,camY:2,landT:0,qAir:
 const AIR_DUR=1.4;
 /* balance meter: after a landing, and late in a long barrel, the needle drifts off centre and keeps tipping;
    drag (the same thumb that carves) to push it back. Reach the end of the meter and you wipe out. */
-const BAL:any={on:false,kind:'',t:0,dur:0,b:0,A:0,noise:0,pay:null,shown:0};
+const BAL:any={on:false,kind:'',t:0,dur:0,b:0,A:0,noise:0,pay:null,shown:0,tubeTips:0};
 const BAL_K=1.6,BAL_LAND=1.1;
 pl.steerIn=0;pl.kick=false;pl.kickK=0;
 const coLive=()=>CO.state==='warn'||CO.state==='roll';
@@ -481,11 +481,16 @@ canvas.addEventListener('pointermove',e=>{if(!swipe||swipe.id!==e.pointerId||swi
   queueTrick(Math.abs(dx)>Math.abs(dy)?'spin':dy<0?'flip':'grab');swipe.used=true;});
 const endSwipe=e=>{if(swipe&&swipe.id===e.pointerId)swipe=null;};
 canvas.addEventListener('pointerup',endSwipe);canvas.addEventListener('pointercancel',endSwipe);
-let tuckBtn=false,dragId=null,lastY=0;const keys:any={};
+let tuckBtn=false;const drags:any={};const keys:any={};
 function takeOver(){if(G.demo){G.demo=false;const keep=B.state;resetRun();if(keep!=='idle')Object.assign(B,{state:'idle',next:4});el.demo.hidden=true;setTimeout(()=>el.hint.style.opacity='0',5000);}}
-canvas.addEventListener('pointerdown',e=>{if(G.ended)return;const wasDemo=G.demo;takeOver();if(!wasDemo)popUp();dragId=e.pointerId;lastY=e.clientY;canvas.setPointerCapture&&canvas.setPointerCapture(e.pointerId);});
-canvas.addEventListener('pointermove',e=>{if(e.pointerId!==dragId||(pl.air&&swipe&&swipe.id===e.pointerId))return;const dy=e.clientY-lastY;lastY=e.clientY;pl.steerIn-=dy/window.innerHeight*2.4;if(!landBal())pl.fT=clamp(pl.fT-dy/window.innerHeight*2.4,-0.05,1.2);});
-const endDrag=e=>{if(e.pointerId===dragId)dragId=null;};
+canvas.addEventListener('pointerdown',e=>{if(G.ended)return;const wasDemo=G.demo;takeOver();if(!wasDemo)popUp();drags[e.pointerId]={y:e.clientY,right:e.clientX>window.innerWidth*0.5};canvas.setPointerCapture&&canvas.setPointerCapture(e.pointerId);});
+canvas.addEventListener('pointermove',e=>{const d=drags[e.pointerId];if(!d||(pl.air&&swipe&&swipe.id===e.pointerId))return;
+  const k=(e.clientY-d.y)/window.innerHeight*2.4;d.y=e.clientY;
+  /* in the barrel the meter gets its own thumb: a drag on the right half moves the needle, the left half steers to the pearls */
+  const split=BAL.on&&BAL.kind==='barrel';
+  if(!split||d.right)pl.steerIn-=k;
+  if(!landBal()&&!(split&&d.right))pl.fT=clamp(pl.fT-k,-0.05,1.2);});
+const endDrag=e=>{delete drags[e.pointerId];};
 canvas.addEventListener('pointerup',endDrag);canvas.addEventListener('pointercancel',endDrag);
 el.tuck.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();try{el.tuck.setPointerCapture(e.pointerId);}catch(_){}if(G.ended)return;const wasDemo=G.demo;takeOver();if(!wasDemo&&G.phase==='paddle'){popUp();return;}tuckBtn=true;el.tuck.classList.add('on');});
 const tuckUp=()=>{tuckBtn=false;el.tuck.classList.remove('on');};
@@ -711,7 +716,8 @@ function step(dt){
      if(Math.abs(BAL.b)>=1){BAL.b=Math.sign(BAL.b);const k=BAL.kind;stopBalance();
        wipeout('LOST BALANCE');if(k==='barrel'&&B.state==='barrel'){B.state='closing';B.t=0;}}
      else if(BAL.kind==='land'&&BAL.t>=BAL.dur)finishLanding();
-   }else if(B.state==='barrel'&&!(pl.wipe>0)&&pl.barrelT>1.6&&BAL.kind!=='barrelDone')startBalance('barrel',0,null);
+   }else if(B.state==='barrel'&&!(pl.wipe>0)&&pl.barrelT>1.6&&BAL.kind!=='barrelDone'){startBalance('barrel',0,null);
+     if(!G.demo&&BAL.tubeTips<2){BAL.tubeTips++;popup('HOLD YOUR BALANCE','Right thumb: needle · Left thumb: steer');}}
    if(B.state!=='barrel'&&BAL.kind==='barrelDone')BAL.kind='';
   }
   function startBalance(kind,b0,pay){Object.assign(BAL,{on:true,kind,t:0,dur:kind==='land'?BAL_LAND:99,b:b0,A:0,noise:kind==='land'?0.1:0.15,pay});}
